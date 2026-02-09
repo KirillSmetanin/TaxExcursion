@@ -66,8 +66,8 @@ def init_database():
                 contact_person VARCHAR(200) NOT NULL,
                 contact_phone VARCHAR(20) NOT NULL,
                 participants_count INTEGER NOT NULL,
-                booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(excursion_date)
+                booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                -- УБРАЛИ UNIQUE(excursion_date) чтобы разрешить 2 записи на день
             )
         ''')
         
@@ -75,7 +75,7 @@ def init_database():
         cursor.close()
         conn.close()
         db_initialized = True
-        print("✅ База данных PostgreSQL инициализирована (psycopg3)")
+        print("✅ База данных PostgreSQL инициализирована")
         
     except Exception as e:
         print(f"❌ Ошибка БД: {e}")
@@ -346,14 +346,17 @@ def submit_booking():
             </html>
             ''', 400
         
-        # Проверяем доступность
+        # Проверяем доступность (максимум 2 записи в день)
         bookings = get_bookings_count_by_date()
-        if bookings.get(excursion_date, 0) >= 2:
+        current_count = bookings.get(excursion_date, 0)
+        
+        if current_count >= 2:
             return '''
             <!DOCTYPE html>
             <html>
             <body style="font-family: Arial; padding: 40px; text-align: center;">
                 <h1 style="color: #e74c3c;">❌ На эту дату уже нет свободных мест</h1>
+                <p>Максимум 2 группы в день.</p>
                 <a href="/" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
                     Вернуться к календарю
                 </a>
@@ -361,7 +364,7 @@ def submit_booking():
             </html>
             '''
         
-        # Сохраняем в БД
+        # Сохраняем в БД (без ON CONFLICT, так как убрали уникальность)
         conn = get_db_connection()
         cursor = conn.cursor()
         

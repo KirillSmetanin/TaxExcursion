@@ -7,6 +7,9 @@ from psycopg.rows import dict_row
 import urllib.parse
 import csv
 import io
+import threading
+import requests
+import time
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-12345')
@@ -23,6 +26,27 @@ RUSSIAN_WEEKDAYS_FULL = ['Понедельник', 'Вторник', 'Среда
 
 # Флаг для отслеживания инициализации БД
 db_initialized = False
+
+def start_keep_alive():
+    """Запускает keep-alive в фоновом потоке"""
+    def ping_self():
+        url = os.environ.get('RENDER_EXTERNAL_URL', 'https://taxexcursion.ru')
+        
+        while True:
+            try:
+                response = requests.get(f"{url}/health", timeout=10)
+                print(f"[{datetime.now()}] Keep-alive ping: {response.status_code}")
+            except Exception as e:
+                print(f"[{datetime.now()}] Keep-alive failed: {e}")
+            
+            # Ждем 10 минут (600 секунд) - достаточно часто чтобы не заснуть
+            time.sleep(600)
+
+    # Запускаем только на Render
+    if os.environ.get('RENDER') == 'true':
+        thread = threading.Thread(target=ping_self, daemon=True)
+        thread.start()
+        print("✅ Keep-alive service started")
 
 def get_db_connection():
     """Подключение к PostgreSQL с psycopg3"""
@@ -1237,5 +1261,7 @@ def health():
 
 if __name__ == '__main__':
     init_database()
+    # Запускаем keep-alive при старте
+    start_keep_alive()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

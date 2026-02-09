@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Запись на экскурсию в УФНС</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
         * {
             margin: 0;
@@ -127,13 +131,23 @@
             position: relative;
         }
         
+        .day-content {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .day-main {
+            flex: 1;
+        }
+        
         .day-number {
             font-size: 1.2em;
             font-weight: bold;
             margin-bottom: 5px;
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
         }
         
         .day-status {
@@ -148,6 +162,11 @@
             font-size: 0.75em;
             margin-top: 5px;
             opacity: 0.8;
+        }
+        
+        .day-footer {
+            margin-top: auto;
+            padding-top: 5px;
         }
         
         /* Статусы дней */
@@ -266,6 +285,8 @@
             transition: all 0.3s;
             border: none;
             cursor: pointer;
+            width: 100%;
+            text-align: center;
         }
         
         .booking-btn:hover {
@@ -282,25 +303,201 @@
             font-size: 0.7em;
             color: #7f8c8d;
             margin-top: 5px;
+            text-align: center;
         }
         
+        .mobile-date {
+            display: none;
+            font-size: 0.7em;
+            color: #666;
+            margin-top: 2px;
+            text-align: center;
+        }
+        
+        /* Мобильные стили */
         @media (max-width: 768px) {
             .calendar th, .calendar td {
-                padding: 5px;
-                height: 80px;
+                padding: 8px 3px;
+                height: 85px;
+            }
+            
+            .calendar th {
+                padding: 10px 5px;
+                font-size: 0.9em;
+            }
+            
+            .day-number {
+                font-size: 1.1em;
+                flex-direction: column;
+                align-items: center;
+                gap: 3px;
+                text-align: center;
+            }
+            
+            .day-status {
+                font-size: 0.75em;
+                padding: 2px 6px;
+                margin-top: 0;
+                align-self: center;
+            }
+            
+            .slots-info {
+                font-size: 0.7em;
+                margin-top: 3px;
+                text-align: center;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            
+            .booking-btn {
+                padding: 6px 10px;
+                font-size: 0.75em;
+                margin-top: 5px;
+                white-space: nowrap;
+            }
+            
+            .weekend-label {
+                font-size: 0.65em;
+                margin-top: 3px;
+            }
+            
+            .current-month {
+                font-size: 1.4em;
+                min-width: 200px;
+            }
+            
+            .calendar-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .header p {
+                font-size: 1em;
+            }
+            
+            .legend {
+                gap: 10px;
+            }
+            
+            .legend-item {
+                font-size: 0.8em;
+            }
+            
+            .mobile-date {
+                display: block;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .calendar th, .calendar td {
+                padding: 5px 2px;
+                height: 75px;
+                font-size: 0.85em;
+            }
+            
+            .calendar th {
+                padding: 8px 3px;
+                font-size: 0.85em;
             }
             
             .day-number {
                 font-size: 1em;
             }
             
-            .current-month {
-                font-size: 1.4em;
+            .day-status {
+                font-size: 0.7em;
+                padding: 1px 5px;
             }
             
-            .calendar-header {
+            .slots-info {
+                font-size: 0.65em;
+            }
+            
+            .booking-btn {
+                padding: 4px 8px;
+                font-size: 0.7em;
+            }
+            
+            .container {
+                border-radius: 15px;
+            }
+            
+            .calendar-container {
+                padding: 15px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .legend {
                 flex-direction: column;
-                gap: 15px;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            
+            .nav-btn {
+                width: 35px;
+                height: 35px;
+                font-size: 1em;
+            }
+        }
+        
+        @media (max-width: 360px) {
+            .calendar th, .calendar td {
+                height: 70px;
+                padding: 3px 1px;
+            }
+            
+            .day-number {
+                font-size: 0.9em;
+            }
+            
+            .slots-info {
+                display: none;
+            }
+            
+            .weekend-label {
+                display: none;
+            }
+            
+            .mobile-date {
+                font-size: 0.6em;
+            }
+            
+            .booking-btn {
+                font-size: 0.65em;
+                padding: 3px 6px;
+            }
+        }
+        
+        /* Для печати */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+            
+            .nav-btn, .booking-btn {
+                display: none;
             }
         }
     </style>
@@ -344,49 +541,60 @@
                             {% for day in week %}
                                 <td class="day-{% if day %}{{ day.status }}{% if day.is_today %} day-today{% endif %}{% else %}empty{% endif %}">
                                     {% if day %}
-                                        <div class="day-number">
-                                            <span>{{ day.day }}</span>
-                                            {% if day.status == 'available' or day.status == 'limited' or day.status == 'booked' %}
-                                                <span class="day-status status-{{ day.status }}">
-                                                    {{ day.available_slots }}/2
-                                                </span>
-                                            {% elif day.status == 'weekend' %}
-                                                <span class="day-status status-weekend">
-                                                    Вых
-                                                </span>
-                                            {% endif %}
+                                        <div class="day-content">
+                                            <div class="day-main">
+                                                <div class="day-number">
+                                                    <span>{{ day.day }}</span>
+                                                    {% if day.status == 'available' or day.status == 'limited' or day.status == 'booked' %}
+                                                        <span class="day-status status-{{ day.status }}">
+                                                            {{ day.available_slots }}/2
+                                                        </span>
+                                                    {% elif day.status == 'weekend' %}
+                                                        <span class="day-status status-weekend">
+                                                            Вых
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+                                                
+                                                <div class="mobile-date">
+                                                    {{ day.weekday_name|slice:":3" }}
+                                                </div>
+                                                
+                                                {% if day.status == 'available' %}
+                                                    <div class="slots-info">
+                                                        ✓ 2 места свободно
+                                                    </div>
+                                                {% elif day.status == 'limited' %}
+                                                    <div class="slots-info">
+                                                        ! 1 место осталось
+                                                    </div>
+                                                {% elif day.status == 'booked' %}
+                                                    <div class="slots-info">
+                                                        ✗ Нет мест
+                                                    </div>
+                                                {% elif day.status == 'past' %}
+                                                    <div class="slots-info">
+                                                        Прошедшая дата
+                                                    </div>
+                                                {% elif day.status == 'weekend' %}
+                                                    <div class="weekend-label">
+                                                        Выходной
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <div class="day-footer">
+                                                {% if day.status == 'available' or day.status == 'limited' %}
+                                                    <a href="/book/{{ day.date_str }}" class="booking-btn">
+                                                        Записаться
+                                                    </a>
+                                                {% elif day.status == 'booked' %}
+                                                    <button class="booking-btn disabled" disabled>
+                                                        Недоступно
+                                                    </button>
+                                                {% endif %}
+                                            </div>
                                         </div>
-                                        
-                                        {% if day.status == 'available' %}
-                                            <div class="slots-info">
-                                                ✓ 2 места свободно
-                                            </div>
-                                            <a href="/book/{{ day.date_str }}" class="booking-btn">
-                                                Записаться
-                                            </a>
-                                        {% elif day.status == 'limited' %}
-                                            <div class="slots-info">
-                                                ! 1 место осталось
-                                            </div>
-                                            <a href="/book/{{ day.date_str }}" class="booking-btn">
-                                                Записаться
-                                            </a>
-                                        {% elif day.status == 'booked' %}
-                                            <div class="slots-info">
-                                                ✗ Нет мест
-                                            </div>
-                                            <button class="booking-btn disabled" disabled>
-                                                Недоступно
-                                            </button>
-                                        {% elif day.status == 'past' %}
-                                            <div class="slots-info">
-                                                Прошедшая дата
-                                            </div>
-                                        {% elif day.status == 'weekend' %}
-                                            <div class="weekend-label">
-                                                Выходной
-                                            </div>
-                                        {% endif %}
                                     {% endif %}
                                 </td>
                             {% endfor %}
@@ -422,10 +630,82 @@
         <div class="footer">
             <p>УФНС России | Система записи на экскурсии | © 2024</p>
             <p style="margin-top: 10px; font-size: 0.8em;">
-                <a href="/test" style="color: #666; margin-right: 15px;">Тест данных</a>
-                <a href="/admin" style="color: #666;">Админ-панель</a>
+                <a href="/admin/login" style="color: #666; margin-right: 15px;">Админ-панель</a>
+                <a href="/health" style="color: #666;">Состояние системы</a>
             </p>
         </div>
     </div>
+    
+    <script>
+        // Keep-alive для Render free tier
+        if (window.location.hostname.includes('render.com') || window.location.hostname.includes('taxexcursion.ru')) {
+            setInterval(() => {
+                fetch('/health')
+                    .then(response => response.json())
+                    .then(data => console.log('Keep-alive ping:', new Date().toLocaleTimeString()))
+                    .catch(err => console.log('Keep-alive error:', err));
+            }, 300000); // Каждые 5 минут
+        }
+        
+        // Улучшение мобильного UX
+        document.addEventListener('DOMContentLoaded', function() {
+            // Добавляем touch события для мобильных устройств
+            if ('ontouchstart' in window) {
+                const cells = document.querySelectorAll('.calendar td[class*="day-"]:not(.day-empty)');
+                cells.forEach(cell => {
+                    cell.addEventListener('touchstart', function() {
+                        this.style.transform = 'scale(0.98)';
+                    });
+                    
+                    cell.addEventListener('touchend', function() {
+                        this.style.transform = '';
+                    });
+                });
+            }
+            
+            // Определяем мобильное устройство
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            if (isMobile) {
+                // Улучшаем отображение для мобильных
+                document.body.classList.add('mobile-device');
+                
+                // Добавляем свайп для навигации по месяцам
+                let startX = 0;
+                let startY = 0;
+                
+                document.addEventListener('touchstart', function(e) {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                });
+                
+                document.addEventListener('touchend', function(e) {
+                    if (!startX || !startY) return;
+                    
+                    const endX = e.changedTouches[0].clientX;
+                    const endY = e.changedTouches[0].clientY;
+                    
+                    const diffX = startX - endX;
+                    const diffY = startY - endY;
+                    
+                    // Только горизонтальные свайпы
+                    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+                        if (diffX > 0) {
+                            // Свайп влево - следующий месяц
+                            const nextBtn = document.querySelector('.nav-btn[href*="next"]');
+                            if (nextBtn) window.location.href = nextBtn.href;
+                        } else {
+                            // Свайп вправо - предыдущий месяц
+                            const prevBtn = document.querySelector('.nav-btn[href*="prev"]');
+                            if (prevBtn) window.location.href = prevBtn.href;
+                        }
+                    }
+                    
+                    startX = 0;
+                    startY = 0;
+                });
+            }
+        });
+    </script>
 </body>
 </html>

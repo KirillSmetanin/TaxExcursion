@@ -76,12 +76,30 @@ def init_database():
             )
         ''')
         
+        # УДАЛЯЕМ уникальное ограничение если оно существует
+        try:
+            cursor.execute("""
+                SELECT constraint_name 
+                FROM information_schema.table_constraints 
+                WHERE table_name = 'bookings' 
+                AND constraint_type = 'UNIQUE'
+                AND constraint_name LIKE '%excursion_date%'
+            """)
+            
+            unique_constraints = cursor.fetchall()
+            for constraint in unique_constraints:
+                constraint_name = constraint[0]
+                print(f"⚠️ Удаляем уникальное ограничение: {constraint_name}")
+                cursor.execute(f'ALTER TABLE bookings DROP CONSTRAINT IF EXISTS {constraint_name}')
+                
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки ограничений: {e}")
+        
         # Проверяем и добавляем отсутствующие колонки
         try:
             cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'bookings'")
             existing_columns = [row[0] for row in cursor.fetchall()]
             
-            # Добавляем колонку status если её нет
             if 'status' not in existing_columns:
                 print("⚠️ Добавляем колонку 'status'...")
                 cursor.execute('''
@@ -89,7 +107,6 @@ def init_database():
                     ADD COLUMN status VARCHAR(20) DEFAULT 'pending'
                 ''')
             
-            # Добавляем колонку additional_info если её нет
             if 'additional_info' not in existing_columns:
                 print("⚠️ Добавляем колонку 'additional_info'...")
                 cursor.execute('''
@@ -624,7 +641,146 @@ def admin():
         </body>
         </html>
         ''', 500
-    
+
+@app.route('/admin/fix_database')
+@admin_required
+def fix_database():
+    """Исправление структуры базы данных"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        results = []
+        
+        # 1. Проверяем уникальные ограничения
+        cursor.execute("""
+            SELECT constraint_name, constraint_type
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'bookings'
+        """)
+        
+        constraints = cursor.fetchall()
+        results.append(f"📋 Найдено ограничений: {len(constraints)}")
+        
+        for constraint in constraints:
+            results.append(f"  - {constraint[0]} ({constraint[1]})")
+        
+        # 2. Удаляем уникальное ограничение на excursion_date если оно существует
+        cursor.execute("""
+            SELECT constraint_name 
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'bookings' 
+            AND constraint_type = 'UNIQUE'
+            AND constraint_name LIKE '%excursion_date%'
+        """)
+        
+        unique_constraints = cursor.fetchall()
+        
+        if unique_constraints:
+            for constraint in unique_constraints:
+                constraint_name = constraint[0]
+                try:
+                    cursor.execute(f'ALTER TABLE bookings DROP CONSTRAINT IF EXISTS {constraint_name}')
+                    results.append(f"✅ Удалено уникальное ограничение: {constraint_name}")
+                except Exception as e:
+                    results.append(f"❌ Ошибка удаления {constraint_name}: {e}")
+        else:
+            results.append("✅ Уникального ограничения на excursion_date нет")
+        
+        # 3. Проверяем существующие индексы
+        cursor.execute("""
+            SELECT indexname, indexdef 
+            FROM pg_indexes 
+            WHERE tablename = 'bookings'
+        """)
+        
+        indexes = cursor.fetchall()
+        results.append(f"📋 Найдено индексов: {len(indexes)}")
+        
+        for idx in indexes:
+            results.append(f"  - {idx[0]}: {idx[1][:100]}...")
+        
+        conn.commit()
+        
+        # 4. Проверяем количество записей на одну дату
+        cursor.execute("""
+            SELECT excursion_date, COUNT(*) as count
+            FROM bookings
+            GROUP BY excursion_date
+            HAVING COUNT(*) > 1
+            ORDER BY count DESC
+        """)
+        
+        duplicate_dates = cursor.fetchall()
+        
+        if duplicate_dates:
+            results.append(f"\n📊 Даты с несколькими записями: {len(duplicate_dates)}")
+            for date_str, count in duplicate_dates[:10]:  # Показываем первые 10
+                results.append(f"  - {date_str}: {count} записей")
+        else:
+            results.append("\n✅ Нет дат с несколькими записями")
+        
+        cursor.close()
+        conn.close()
+        
+        # Отображаем результаты
+        html_result = "<br>".join(results)
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Исправление базы данных</title>
+            <style>
+                body {{ font-family: Arial; padding: 40px; background: #f5f5f5; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+                .success {{ color: #2ecc71; }}
+                .error {{ color: #e74c3c; }}
+                .info {{ color: #3498db; }}
+                .warning {{ color: #f39c12; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; }}
+                .btn-danger {{ background: #e74c3c; }}
+                .btn-success {{ background: #2ecc71; }}
+                pre {{ background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔧 Исправление базы данных</h1>
+                <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                    {html_result}
+                </div>
+                
+                <div style="margin-top: 30px; padding: 20px; background: #fff3cd; border-radius: 5px;">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Что было сделано:</h3>
+                    <ul>
+                        <li>Удалено уникальное ограничение на поле excursion_date</li>
+                        <li>Теперь можно создавать до 2 записей на одну дату</li>
+                        <li>Старые данные сохранены</li>
+                    </ul>
+                </div>
+                
+                <div style="margin-top: 30px;">
+                    <a href="/admin" class="btn">Вернуться в админ-панель</a>
+                    <a href="/admin/fix_database" class="btn btn-success">Проверить снова</a>
+                    <a href="/" class="btn">Перейти к календарю</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        '''
+        
+    except Exception as e:
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h1 style="color: #e74c3c;">❌ Ошибка исправления базы</h1>
+            <pre>{str(e)}</pre>
+            <a href="/admin">Вернуться в админ-панель</a>
+        </body>
+        </html>
+        ''', 500
+
 @app.route('/admin/migrate')
 @admin_required
 def migrate_database_route():

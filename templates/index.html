@@ -1,93 +1,374 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <!-- ... остальная часть head без изменений ... -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Запись на экскурсию в УФНС</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <style>
-        /* Существующие стили остаются, добавляем только новые */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         
-        /* Мобильная версия - линейный список */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+        
+        .calendar-container {
+            padding: 30px;
+        }
+        
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        
+        .month-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .nav-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        
+        .nav-btn:hover {
+            background: #2980b9;
+            transform: scale(1.1);
+        }
+        
+        .current-month {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #2c3e50;
+            min-width: 250px;
+            text-align: center;
+        }
+        
+        .stats {
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .calendar {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 5px;
+            margin-bottom: 30px;
+        }
+        
+        .calendar th {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: 600;
+            border-radius: 10px;
+        }
+        
+        .calendar td {
+            height: 100px;
+            vertical-align: top;
+            padding: 10px;
+            border-radius: 10px;
+            transition: all 0.3s;
+            position: relative;
+        }
+        
+        .day-content {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .day-main {
+            flex: 1;
+        }
+        
+        .day-number {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        
+        .day-status {
+            font-size: 0.8em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .slots-info {
+            font-size: 0.75em;
+            margin-top: 5px;
+            opacity: 0.8;
+        }
+        
+        .day-footer {
+            margin-top: auto;
+            padding-top: 5px;
+        }
+        
+        /* Статусы дней */
+        .day-available {
+            background: rgba(46, 204, 113, 0.1);
+            border: 2px solid #2ecc71;
+            cursor: pointer;
+        }
+        
+        .day-available:hover {
+            background: rgba(46, 204, 113, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+        }
+        
+        .day-limited {
+            background: rgba(241, 196, 15, 0.1);
+            border: 2px solid #f1c40f;
+            cursor: pointer;
+        }
+        
+        .day-limited:hover {
+            background: rgba(241, 196, 15, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(241, 196, 15, 0.3);
+        }
+        
+        .day-booked {
+            background: rgba(231, 76, 60, 0.1);
+            border: 2px solid #e74c3c;
+            cursor: not-allowed;
+        }
+        
+        .day-past {
+            background: #f5f5f5;
+            color: #bbb;
+            cursor: not-allowed;
+            border: 2px solid #eee;
+        }
+        
+        .day-weekend {
+            background: rgba(149, 165, 166, 0.1);
+            border: 2px solid #95a5a6;
+            color: #7f8c8d;
+            cursor: not-allowed;
+        }
+        
+        .day-empty {
+            background: none;
+            border: 2px dashed #eee;
+        }
+        
+        .day-today {
+            background: rgba(52, 152, 219, 0.1);
+            border: 2px solid #3498db;
+        }
+        
+        .status-available {
+            background: #2ecc71;
+        }
+        
+        .status-limited {
+            background: #f1c40f;
+        }
+        
+        .status-booked {
+            background: #e74c3c;
+        }
+        
+        .status-weekend {
+            background: #95a5a6;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #f0f0f0;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .booking-btn {
+            display: inline-block;
+            margin-top: 10px;
+            padding: 8px 16px;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            transition: all 0.3s;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .booking-btn:hover {
+            background: #2980b9;
+            transform: translateY(-2px);
+        }
+        
+        .booking-btn.disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .weekend-label {
+            font-size: 0.7em;
+            color: #7f8c8d;
+            margin-top: 5px;
+            text-align: center;
+        }
+        
+        /* Мобильная версия - скрываем по умолчанию */
         .calendar-mobile {
             display: none;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
+            margin-bottom: 30px;
         }
         
         .mobile-day {
             background: white;
-            border-radius: 10px;
-            padding: 15px;
-            border-left: 5px solid;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            padding: 16px;
+            border-left: 6px solid;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+        
+        .mobile-day:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.12);
         }
         
         .mobile-day-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid #eee;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0f0f0;
         }
         
         .mobile-date {
             font-weight: bold;
             font-size: 1.1em;
+            color: #2c3e50;
         }
         
         .mobile-status {
-            padding: 4px 10px;
-            border-radius: 15px;
+            padding: 5px 12px;
+            border-radius: 20px;
             color: white;
             font-size: 0.8em;
             font-weight: bold;
+            text-align: center;
+            min-width: 80px;
         }
         
         .mobile-details {
             font-size: 0.9em;
             color: #666;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .mobile-slots {
-            font-size: 0.85em;
-            margin-bottom: 10px;
-            padding: 5px;
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            padding: 8px 12px;
             background: #f8f9fa;
-            border-radius: 5px;
-        }
-        
-        /* Скрываем десктопный календарь на мобильных */
-        @media (max-width: 768px) {
-            .calendar {
-                display: none;
-            }
-            
-            .calendar-mobile {
-                display: flex;
-            }
-            
-            .legend {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-                font-size: 0.85em;
-            }
-            
-            /* Улучшаем заголовок для мобильных */
-            .calendar-header {
-                flex-direction: column;
-                gap: 15px;
-            }
-            
-            .current-month {
-                font-size: 1.4em;
-                min-width: auto;
-            }
-            
-            .month-nav {
-                justify-content: center;
-                width: 100%;
-            }
+            border-radius: 8px;
+            border-left: 4px solid;
         }
         
         /* Стили для разных статусов в мобильной версии */
@@ -134,48 +415,104 @@
         /* Фильтр для мобильных */
         .mobile-filter {
             display: none;
-            margin-bottom: 15px;
-            padding: 10px;
-            background: #f8f9fa;
-            border-radius: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            border: 1px solid #dee2e6;
         }
         
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 25px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+        
+        .filter-btn.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        
+        .filter-btn:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+        
+        .filter-btn.active:hover {
+            background: #2980b9;
+            border-color: #2980b9;
+        }
+        
+        /* Мобильные стили */
         @media (max-width: 768px) {
+            /* Скрываем десктопный календарь, показываем мобильный */
+            .calendar {
+                display: none;
+            }
+            
+            .calendar-mobile {
+                display: flex;
+            }
+            
             .mobile-filter {
                 display: block;
             }
             
-            .filter-buttons {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-                margin-top: 10px;
+            .calendar-header {
+                flex-direction: column;
+                gap: 15px;
             }
             
-            .filter-btn {
-                padding: 6px 12px;
-                background: #e9ecef;
-                border: none;
-                border-radius: 20px;
+            .current-month {
+                font-size: 1.4em;
+                min-width: auto;
+            }
+            
+            .month-nav {
+                justify-content: center;
+                width: 100%;
+            }
+            
+            .legend {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
                 font-size: 0.85em;
-                cursor: pointer;
-                transition: all 0.3s;
             }
             
-            .filter-btn.active {
-                background: #3498db;
-                color: white;
+            .header h1 {
+                font-size: 1.8em;
             }
             
-            .filter-btn:hover {
-                background: #dee2e6;
+            .header p {
+                font-size: 1em;
+            }
+            
+            .calendar-container {
+                padding: 20px;
             }
         }
         
-        /* Для совсем маленьких экранов */
         @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
             .mobile-day {
-                padding: 12px;
+                padding: 14px;
             }
             
             .mobile-date {
@@ -184,7 +521,8 @@
             
             .mobile-status {
                 font-size: 0.75em;
-                padding: 3px 8px;
+                padding: 4px 10px;
+                min-width: 70px;
             }
             
             .mobile-details {
@@ -192,13 +530,154 @@
             }
             
             .mobile-slots {
+                font-size: 0.85em;
+                padding: 6px 10px;
+            }
+            
+            .filter-buttons {
+                gap: 8px;
+            }
+            
+            .filter-btn {
+                padding: 6px 12px;
                 font-size: 0.8em;
+            }
+            
+            .booking-btn {
+                padding: 10px 16px;
+                font-size: 0.9em;
+            }
+            
+            .container {
+                border-radius: 15px;
+            }
+            
+            .calendar-container {
+                padding: 15px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .nav-btn {
+                width: 35px;
+                height: 35px;
+                font-size: 1em;
+            }
+        }
+        
+        /* Для очень маленьких экранов */
+        @media (max-width: 360px) {
+            .mobile-day {
+                padding: 12px;
+            }
+            
+            .mobile-date {
+                font-size: 0.95em;
+            }
+            
+            .mobile-status {
+                font-size: 0.7em;
+                padding: 3px 8px;
+                min-width: 65px;
+            }
+            
+            .mobile-details {
+                font-size: 0.8em;
+            }
+            
+            .mobile-slots {
+                font-size: 0.8em;
+            }
+            
+            .filter-buttons {
+                gap: 6px;
+            }
+            
+            .filter-btn {
+                padding: 5px 10px;
+                font-size: 0.75em;
             }
             
             .booking-btn {
                 padding: 8px 12px;
                 font-size: 0.85em;
             }
+            
+            .header h1 {
+                font-size: 1.3em;
+            }
+            
+            .current-month {
+                font-size: 1.2em;
+            }
+        }
+        
+        /* Для ландшафтного режима на мобильных */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .mobile-day {
+                padding: 12px;
+            }
+            
+            .mobile-date {
+                font-size: 0.9em;
+            }
+            
+            .filter-buttons {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                padding-bottom: 5px;
+            }
+            
+            .filter-btn {
+                white-space: nowrap;
+            }
+        }
+        
+        /* Для печати */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            
+            .container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+            
+            .nav-btn, .booking-btn, .mobile-filter {
+                display: none !important;
+            }
+            
+            .calendar {
+                display: table !important;
+            }
+            
+            .calendar-mobile {
+                display: none !important;
+            }
+        }
+        
+        /* Анимации */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .mobile-day {
+            animation: fadeIn 0.3s ease-out;
+        }
+        
+        /* Иконки для статусов */
+        .status-icon {
+            margin-right: 6px;
+            font-size: 1.1em;
         }
     </style>
 </head>
@@ -229,18 +708,17 @@
             
             <!-- Мобильный фильтр -->
             <div class="mobile-filter">
-                <div style="font-weight: bold; margin-bottom: 8px;">Фильтр:</div>
+                <div style="font-weight: bold; margin-bottom: 8px; color: #2c3e50;">Фильтр по датам:</div>
                 <div class="filter-buttons">
                     <button class="filter-btn active" data-filter="all">Все дни</button>
                     <button class="filter-btn" data-filter="available">Доступные</button>
-                    <button class="filter-btn" data-filter="limited">Ограниченно</button>
-                    <button class="filter-btn" data-filter="upcoming">Предстоящие</button>
+                    <button class="filter-btn" data-filter="limited">Мало мест</button>
+                    <button class="filter-btn" data-filter="upcoming">Ближайшие</button>
                 </div>
             </div>
             
             <!-- Десктопная версия (таблица) -->
             <table class="calendar">
-                <!-- ... существующая таблица без изменений ... -->
                 <thead>
                     <tr>
                         {% for weekday in calendar.weekdays %}
@@ -267,10 +745,6 @@
                                                             Вых
                                                         </span>
                                                     {% endif %}
-                                                </div>
-                                                
-                                                <div class="mobile-date">
-                                                    {{ day.weekday_name[:3] }}
                                                 </div>
                                                 
                                                 {% if day.status == 'available' %}
@@ -321,18 +795,24 @@
                 {% for week in calendar.weeks %}
                     {% for day in week %}
                         {% if day %}
-                            <div class="mobile-day mobile-day-{{ day.status }}" data-status="{{ day.status }}" data-date="{{ day.date_str }}">
+                            <div class="mobile-day mobile-day-{{ day.status }}" 
+                                 data-status="{{ day.status }}" 
+                                 data-date="{{ day.date_str }}"
+                                 data-available-slots="{{ day.available_slots }}">
                                 <div class="mobile-day-header">
                                     <div class="mobile-date">
-                                        {{ day.day }} {{ calendar.month_name[:3] }}, {{ day.weekday_name }}
+                                        {{ day.day }} {{ calendar.month_name[:3]|lower }}, {{ day.weekday_name }}
+                                        {% if day.is_today %}
+                                            <span style="color: #3498db; font-weight: normal; margin-left: 5px;">(сегодня)</span>
+                                        {% endif %}
                                     </div>
                                     <div class="mobile-status mobile-status-{{ day.status }}">
                                         {% if day.status == 'available' %}
-                                            2 места
+                                            Доступно
                                         {% elif day.status == 'limited' %}
                                             1 место
                                         {% elif day.status == 'booked' %}
-                                            Нет мест
+                                            Занято
                                         {% elif day.status == 'weekend' %}
                                             Выходной
                                         {% elif day.status == 'past' %}
@@ -342,32 +822,45 @@
                                 </div>
                                 
                                 <div class="mobile-details">
-                                    {% if day.is_today %}
-                                        <span style="color: #3498db;">● Сегодня</span>
+                                    {% if day.status == 'available' %}
+                                        <span style="color: #2ecc71;">●</span>
+                                        <span>Свободно 2 места для записи</span>
+                                    {% elif day.status == 'limited' %}
+                                        <span style="color: #f1c40f;">●</span>
+                                        <span>Осталось только 1 место</span>
+                                    {% elif day.status == 'booked' %}
+                                        <span style="color: #e74c3c;">●</span>
+                                        <span>Все места заняты</span>
+                                    {% elif day.status == 'past' %}
+                                        <span style="color: #95a5a6;">●</span>
+                                        <span>Прошедшая дата</span>
+                                    {% elif day.status == 'weekend' %}
+                                        <span style="color: #7f8c8d;">●</span>
+                                        <span>Выходной день</span>
                                     {% endif %}
                                 </div>
                                 
-                                <div class="mobile-slots">
+                                <div class="mobile-slots" style="border-left-color: {% if day.status == 'available' %}#2ecc71{% elif day.status == 'limited' %}#f1c40f{% elif day.status == 'booked' %}#e74c3c{% elif day.status == 'past' %}#95a5a6{% else %}#7f8c8d{% endif %};">
                                     {% if day.status == 'available' %}
-                                        ✓ Доступно 2 места для записи
+                                        ✅ Идеальное время для записи. Группа может быть до 25 человек.
                                     {% elif day.status == 'limited' %}
-                                        ⚠️ Только 1 место осталось
+                                        ⚠️ Торопитесь! Осталось всего 1 место для записи.
                                     {% elif day.status == 'booked' %}
-                                        ✗ Все места заняты
+                                        ❌ На эту дату уже записаны 2 группы.
                                     {% elif day.status == 'past' %}
-                                        📅 Прошедшая дата
+                                        📅 Эта дата уже прошла. Выберите другую.
                                     {% elif day.status == 'weekend' %}
-                                        🏖️ Выходной день
+                                        🏖️ Экскурсии проводятся только в будние дни.
                                     {% endif %}
                                 </div>
                                 
                                 {% if day.status == 'available' or day.status == 'limited' %}
-                                    <a href="/book/{{ day.date_str }}" class="booking-btn" style="width: 100%; text-align: center;">
-                                        Записаться на экскурсию
+                                    <a href="/book/{{ day.date_str }}" class="booking-btn">
+                                        Записаться на экскурсию →
                                     </a>
                                 {% elif day.status == 'booked' %}
-                                    <button class="booking-btn disabled" disabled style="width: 100%; text-align: center;">
-                                        Запись недоступна
+                                    <button class="booking-btn disabled" disabled>
+                                        ❌ Запись недоступна
                                     </button>
                                 {% endif %}
                             </div>
@@ -375,10 +868,29 @@
                     {% endfor %}
                 {% endfor %}
                 
-                {% if calendar.weeks|length == 0 %}
-                <div style="text-align: center; padding: 40px; color: #666;">
-                    Нет доступных дат для отображения
-                </div>
+                {% set has_available_days = false %}
+                {% for week in calendar.weeks %}
+                    {% for day in week %}
+                        {% if day and (day.status == 'available' or day.status == 'limited') %}
+                            {% set has_available_days = true %}
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+                
+                {% if not has_available_days %}
+                    <div style="text-align: center; padding: 40px 20px; background: #f8f9fa; border-radius: 12px; margin: 20px 0;">
+                        <div style="font-size: 1.2em; color: #666; margin-bottom: 15px;">
+                            🗓️ На этот месяц все даты заняты
+                        </div>
+                        <p style="color: #888; margin-bottom: 20px; max-width: 400px; margin-left: auto; margin-right: auto;">
+                            Попробуйте выбрать следующий месяц для поиска свободных дат.
+                        </p>
+                        <a href="/month/{{ calendar.next_year }}/{{ calendar.next_month }}" 
+                           class="booking-btn" 
+                           style="display: inline-block; width: auto; padding: 10px 25px; font-size: 1em;">
+                            Смотреть {{ calendar.next_month }} месяц →
+                        </a>
+                    </div>
                 {% endif %}
             </div>
             
@@ -416,21 +928,112 @@
     </div>
     
     <script>
-        // Keep-alive для Render free tier
+        // Keep-alive для Render free tier - каждые 30 секунд
         if (window.location.hostname.includes('render.com') || window.location.hostname.includes('taxexcursion.ru')) {
+            // Первый пинг сразу после загрузки
+            setTimeout(() => {
+                fetch('/health')
+                    .then(response => response.json())
+                    .then(data => console.log('Initial keep-alive ping:', new Date().toLocaleTimeString(), data.status))
+                    .catch(err => console.log('Initial keep-alive error:', err));
+            }, 1000);
+            
+            // Затем каждые 30 секунд
             setInterval(() => {
                 fetch('/health')
                     .then(response => response.json())
                     .then(data => console.log('Keep-alive ping:', new Date().toLocaleTimeString()))
                     .catch(err => console.log('Keep-alive error:', err));
-            }, 3000); // Каждые 5 минут
+            }, 30000); // Каждые 30 секунд
         }
         
         // Мобильный фильтр
         document.addEventListener('DOMContentLoaded', function() {
             const filterBtns = document.querySelectorAll('.filter-btn');
             const mobileDays = document.querySelectorAll('.mobile-day');
+            const mobileCalendar = document.getElementById('mobileCalendar');
             
+            // Функция фильтрации
+            function filterDays(filter) {
+                let visibleCount = 0;
+                
+                mobileDays.forEach(day => {
+                    const status = day.dataset.status;
+                    const dateStr = day.dataset.date;
+                    const availableSlots = parseInt(day.dataset.availableSlots || 0);
+                    const date = dateStr ? new Date(dateStr) : null;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    
+                    let show = true;
+                    
+                    switch(filter) {
+                        case 'available':
+                            show = status === 'available';
+                            break;
+                        case 'limited':
+                            show = status === 'limited';
+                            break;
+                        case 'upcoming':
+                            show = (status === 'available' || status === 'limited') && 
+                                   date && date >= today;
+                            break;
+                        case 'all':
+                        default:
+                            show = true;
+                    }
+                    
+                    if (show) {
+                        day.style.display = 'block';
+                        visibleCount++;
+                        // Добавляем анимацию
+                        day.style.animation = 'fadeIn 0.3s ease-out';
+                    } else {
+                        day.style.display = 'none';
+                    }
+                });
+                
+                // Показываем сообщение если нет видимых дней
+                let noResultsMsg = document.getElementById('noResultsMessage');
+                if (visibleCount === 0 && filter !== 'all') {
+                    if (!noResultsMsg) {
+                        noResultsMsg = document.createElement('div');
+                        noResultsMsg.id = 'noResultsMessage';
+                        noResultsMsg.style.cssText = 'text-align: center; padding: 40px 20px; background: #f8f9fa; border-radius: 12px; margin: 20px 0;';
+                        noResultsMsg.innerHTML = `
+                            <div style="font-size: 1.2em; color: #666; margin-bottom: 15px;">
+                                🔍 По вашему фильтру не найдено дат
+                            </div>
+                            <p style="color: #888; margin-bottom: 20px;">
+                                Попробуйте изменить параметры фильтра.
+                            </p>
+                            <button class="filter-btn active" data-filter="all" 
+                                    style="background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 25px; cursor: pointer;">
+                                Показать все дни
+                            </button>
+                        `;
+                        
+                        // Добавляем обработчик для кнопки в сообщении
+                        setTimeout(() => {
+                            const showAllBtn = noResultsMsg.querySelector('.filter-btn');
+                            if (showAllBtn) {
+                                showAllBtn.addEventListener('click', function() {
+                                    filterBtns.forEach(btn => btn.classList.remove('active'));
+                                    document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+                                    filterDays('all');
+                                    noResultsMsg.remove();
+                                });
+                            }
+                        }, 100);
+                        
+                        mobileCalendar.appendChild(noResultsMsg);
+                    }
+                } else if (noResultsMsg) {
+                    noResultsMsg.remove();
+                }
+            }
+            
+            // Обработчики для кнопок фильтра
             filterBtns.forEach(btn => {
                 btn.addEventListener('click', function() {
                     // Удаляем активный класс у всех кнопок
@@ -439,121 +1042,150 @@
                     this.classList.add('active');
                     
                     const filter = this.dataset.filter;
+                    filterDays(filter);
                     
-                    // Фильтруем дни
-                    mobileDays.forEach(day => {
-                        const status = day.dataset.status;
-                        const dateStr = day.dataset.date;
-                        const date = dateStr ? new Date(dateStr) : null;
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        
-                        let show = true;
-                        
-                        switch(filter) {
-                            case 'available':
-                                show = status === 'available';
-                                break;
-                            case 'limited':
-                                show = status === 'limited';
-                                break;
-                            case 'upcoming':
-                                show = status !== 'past' && status !== 'weekend' && 
-                                       date && date >= today;
-                                break;
-                            case 'all':
-                            default:
-                                show = true;
-                        }
-                        
-                        if (show) {
-                            day.style.display = 'block';
-                        } else {
-                            day.style.display = 'none';
-                        }
-                    });
+                    // Прокручиваем к началу календаря
+                    mobileCalendar.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 });
             });
             
-            // Автоматическое определение мобильного устройства
+            // Инициализация фильтра
+            filterDays('all');
+            
+            // Определяем мобильное устройство
             function isMobileDevice() {
                 return window.innerWidth <= 768 || 
                        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             }
             
-            // Плавная анимация при клике
-            mobileDays.forEach(day => {
-                day.addEventListener('click', function(e) {
-                    // Если кликнули не на ссылку
-                    if (e.target.tagName !== 'A') {
+            // Улучшаем UX на мобильных
+            if (isMobileDevice()) {
+                // Плавная анимация при касании
+                mobileDays.forEach(day => {
+                    day.addEventListener('touchstart', function() {
                         this.style.transform = 'scale(0.99)';
-                        setTimeout(() => {
-                            this.style.transform = '';
-                        }, 200);
+                        this.style.opacity = '0.95';
+                    });
+                    
+                    day.addEventListener('touchend', function() {
+                        this.style.transform = '';
+                        this.style.opacity = '';
+                    });
+                    
+                    // Клик по всей карточке ведет на запись, если доступно
+                    const link = day.querySelector('a.booking-btn');
+                    if (link) {
+                        day.addEventListener('click', function(e) {
+                            if (!e.target.classList.contains('filter-btn') && 
+                                !e.target.classList.contains('booking-btn')) {
+                                link.click();
+                            }
+                        });
+                        day.style.cursor = 'pointer';
                     }
                 });
-            });
-            
-            // Показываем сообщение если нет доступных дат
-            const availableDays = document.querySelectorAll('.mobile-day[data-status="available"], .mobile-day[data-status="limited"]');
-            if (availableDays.length === 0 && isMobileDevice()) {
-                const mobileCalendar = document.getElementById('mobileCalendar');
-                const noDatesMsg = document.createElement('div');
-                noDatesMsg.style.cssText = 'text-align: center; padding: 30px; background: #f8f9fa; border-radius: 10px; margin: 20px 0;';
-                noDatesMsg.innerHTML = `
-                    <h3 style="color: #666; margin-bottom: 10px;">Нет доступных дат</h3>
-                    <p style="color: #888; margin-bottom: 15px;">На этот месяц все даты заняты или являются выходными</p>
-                    <a href="/month/${new Date().getFullYear()}/${new Date().getMonth() + 2}" 
-                       class="booking-btn" style="display: inline-block; width: auto;">
-                        Посмотреть следующий месяц
-                    </a>
-                `;
-                mobileCalendar.appendChild(noDatesMsg);
-            }
-        });
-        
-        // Определяем мобильное устройство
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (isMobile) {
-            // Улучшаем отображение для мобильных
-            document.body.classList.add('mobile-device');
-            
-            // Добавляем свайп для навигации по месяцам
-            let startX = 0;
-            let startY = 0;
-            
-            document.addEventListener('touchstart', function(e) {
-                startX = e.touches[0].clientX;
-                startY = e.touches[0].clientY;
-            });
-            
-            document.addEventListener('touchend', function(e) {
-                if (!startX || !startY) return;
                 
-                const endX = e.changedTouches[0].clientX;
-                const endY = e.changedTouches[0].clientY;
+                // Добавляем свайп для навигации по месяцам
+                let startX = 0;
+                let startY = 0;
+                const swipeThreshold = 50;
                 
-                const diffX = startX - endX;
-                const diffY = startY - endY;
+                mobileCalendar.addEventListener('touchstart', function(e) {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                }, { passive: true });
                 
-                // Только горизонтальные свайпы
-                if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-                    if (diffX > 0) {
-                        // Свайп влево - следующий месяц
-                        const nextBtn = document.querySelector('.nav-btn[href*="next"]');
-                        if (nextBtn) window.location.href = nextBtn.href;
-                    } else {
-                        // Свайп вправо - предыдущий месяц
-                        const prevBtn = document.querySelector('.nav-btn[href*="prev"]');
-                        if (prevBtn) window.location.href = prevBtn.href;
+                mobileCalendar.addEventListener('touchend', function(e) {
+                    if (!startX || !startY) return;
+                    
+                    const endX = e.changedTouches[0].clientX;
+                    const endY = e.changedTouches[0].clientY;
+                    
+                    const diffX = startX - endX;
+                    const diffY = startY - endY;
+                    
+                    // Только горизонтальные свайпы
+                    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > swipeThreshold) {
+                        e.preventDefault();
+                        
+                        if (diffX > 0) {
+                            // Свайп влево - следующий месяц
+                            const nextBtn = document.querySelector('.nav-btn[href*="next"]');
+                            if (nextBtn) {
+                                // Показываем анимацию загрузки
+                                mobileCalendar.style.opacity = '0.7';
+                                setTimeout(() => {
+                                    window.location.href = nextBtn.href;
+                                }, 200);
+                            }
+                        } else {
+                            // Свайп вправо - предыдущий месяц
+                            const prevBtn = document.querySelector('.nav-btn[href*="prev"]');
+                            if (prevBtn) {
+                                mobileCalendar.style.opacity = '0.7';
+                                setTimeout(() => {
+                                    window.location.href = prevBtn.href;
+                                }, 200);
+                            }
+                        }
                     }
-                }
+                    
+                    startX = 0;
+                    startY = 0;
+                });
                 
-                startX = 0;
-                startY = 0;
-            });
-        }
+                // Добавляем индикатор свайпа
+                const swipeHint = document.createElement('div');
+                swipeHint.style.cssText = 'text-align: center; color: #666; font-size: 0.8em; margin-top: 10px; padding: 10px; opacity: 0.7;';
+                swipeHint.innerHTML = '← Свайпните влево/вправо для смены месяца →';
+                mobileCalendar.parentNode.insertBefore(swipeHint, mobileCalendar.nextSibling);
+                
+                // Убираем подсказку через 5 секунд
+                setTimeout(() => {
+                    swipeHint.style.transition = 'opacity 0.5s';
+                    swipeHint.style.opacity = '0';
+                    setTimeout(() => swipeHint.remove(), 500);
+                }, 5000);
+            }
+            
+            // Автоматический выбор ближайшей доступной даты на мобильных
+            if (isMobileDevice()) {
+                const availableDays = Array.from(mobileDays)
+                    .filter(day => day.dataset.status === 'available' || day.dataset.status === 'limited')
+                    .filter(day => {
+                        const dateStr = day.dataset.date;
+                        if (!dateStr) return false;
+                        const date = new Date(dateStr);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date >= today;
+                    })
+                    .sort((a, b) => {
+                        const dateA = new Date(a.dataset.date);
+                        const dateB = new Date(b.dataset.date);
+                        return dateA - dateB;
+                    });
+                
+                if (availableDays.length > 0) {
+                    // Прокручиваем к первой доступной дате
+                    setTimeout(() => {
+                        availableDays[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        
+                        // Подсвечиваем первую доступную дату
+                        availableDays[0].style.boxShadow = '0 0 0 3px rgba(52, 152, 219, 0.3)';
+                        setTimeout(() => {
+                            availableDays[0].style.boxShadow = '';
+                        }, 3000);
+                    }, 1000);
+                }
+            }
+            
+            // Статистика для отладки
+            console.log('📱 Мобильная версия:', isMobileDevice());
+            console.log('📅 Всего дней:', mobileDays.length);
+            console.log('✅ Доступных дней:', document.querySelectorAll('.mobile-day[data-status="available"]').length);
+            console.log('⚠️ Дней с 1 местом:', document.querySelectorAll('.mobile-day[data-status="limited"]').length);
+        });
     </script>
 </body>
 </html>

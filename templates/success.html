@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Заявка принята!</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            overflow: hidden;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            padding: 40px 25px;
+        }
+        
+        .header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .success-message {
+            color: #27ae60;
+            font-size: 1.3em;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+        
+        .details {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .detail-value {
+            color: #34495e;
+        }
+        
+        .instructions {
+            background: #e8f4fc;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+        
+        .instructions h3 {
+            color: #3498db;
+            margin-bottom: 10px;
+        }
+        
+        .instructions ul {
+            padding-left: 20px;
+        }
+        
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            text-decoration: none;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 14px rgba(52, 152, 219, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #7f8c8d;
+            transform: translateY(-2px);
+        }
+        
+        @media (max-width: 576px) {
+            .btn-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Заявка принята!</h1>
+            <p>Ваша запись успешно оформлена</p>
+        </div>
+        
+        <div class="content">
+            <div class="success-message">
+                ✓ Спасибо! Ваша заявка на экскурсию зарегистрирована в системе.
+            </div>
+            
+            <div class="details">
+                <div class="detail-item">
+                    <span class="detail-label">Дата экскурсии:</span>
+                    <span class="detail-value">{{ date_formatted }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Учебное заведение:</span>
+                    <span class="detail-value">{{ school_name }}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">Контактное лицо:</span>
+                    <span class="detail-value">{{ contact_person }}</span>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <h3>Что дальше?</h3>
+                <ul>
+                    <li>В течение 2 рабочих дней с вами свяжется сотрудник УФНС</li>
+                    <li>Подтвердите запись по указанному телефону</li>
+                    <li>Получите подробную информацию о времени и месте встречи</li>
+                    <li>При себе иметь документ, удостоверяющий личность</li>
+                </ul>
+            </div>
+            
+            <div class="btn-group">
+                <a href="/" class="btn btn-primary">Вернуться к календарю</a>
+                <a href="/admin" class="btn btn-secondary">Все записи</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

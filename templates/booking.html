@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Запись на {{ date_formatted }}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+            overflow: hidden;
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+        
+        .date-info {
+            font-size: 1.2em;
+            opacity: 0.9;
+            margin-bottom: 10px;
+        }
+        
+        .slots-info {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            font-weight: bold;
+        }
+        
+        .form-container {
+            padding: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: #3498db;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .btn-submit {
+            flex: 2;
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 7px 14px rgba(46, 204, 113, 0.3);
+        }
+        
+        .btn-cancel {
+            flex: 1;
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-cancel:hover {
+            background: #7f8c8d;
+            transform: translateY(-2px);
+        }
+        
+        .required {
+            color: #e74c3c;
+        }
+        
+        .info-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .info-box p {
+            margin-bottom: 10px;
+        }
+        
+        .info-box ul {
+            padding-left: 20px;
+            margin-bottom: 10px;
+        }
+        
+        @media (max-width: 576px) {
+            .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+            
+            .btn-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Запись на экскурсию</h1>
+            <div class="date-info">
+                {{ weekday }}, {{ date_formatted }}
+            </div>
+            <div class="slots-info">
+                Свободно мест: {{ available_slots }}/2
+            </div>
+        </div>
+        
+        <div class="form-container">
+            <div class="info-box">
+                <p><strong>Информация об экскурсии:</strong></p>
+                <ul>
+                    <li>Продолжительность: 1,5-2 часа</li>
+                    <li>Группа: до 20 человек</li>
+                    <li>Время: по согласованию</li>
+                    <li>Запись подтверждается по телефону</li>
+                </ul>
+                <p style="color: #e74c3c;">Поля отмеченные <span class="required">*</span> обязательны для заполнения</p>
+            </div>
+            
+            <form action="/submit_booking" method="POST">
+                <input type="hidden" name="excursion_date" value="{{ date_str }}">
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>ФИО ответственного лица <span class="required">*</span></label>
+                        <input type="text" name="username" required placeholder="Иванов Иван Иванович">
+                    </div>
+                    <div class="form-group">
+                        <label>Контактный телефон <span class="required">*</span></label>
+                        <input type="tel" name="contact_phone" required placeholder="+7 (900) 123-45-67">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Название учебного заведения <span class="required">*</span></label>
+                    <input type="text" name="school_name" required placeholder="МБОУ СОШ №1 г. Москвы">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Класс/курс <span class="required">*</span></label>
+                        <input type="text" name="class_number" required placeholder="10А, 1 курс и т.д.">
+                    </div>
+                    <div class="form-group">
+                        <label>Профиль класса (если есть)</label>
+                        <input type="text" name="class_profile" placeholder="Социально-экономический, технический">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Контактное лицо в УФНС <span class="required">*</span></label>
+                    <input type="text" name="contact_person" required placeholder="Петрова Мария Сергеевна">
+                </div>
+                
+                <div class="form-group">
+                    <label>Количество участников <span class="required">*</span></label>
+                    <input type="number" name="participants_count" min="1" max="20" required value="15">
+                    <small style="color: #666; display: block; margin-top: 5px;">От 1 до 20 человек</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Дополнительная информация</label>
+                    <textarea name="additional_info" rows="3" placeholder="Особые требования, время предпочтительного посещения и т.д."></textarea>
+                </div>
+                
+                <div class="btn-group">
+                    <button type="submit" class="btn-submit">
+                        Отправить заявку
+                    </button>
+                    <a href="/" class="btn-cancel">
+                        Отмена
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

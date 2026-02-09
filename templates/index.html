@@ -557,7 +557,7 @@
                                                 </div>
                                                 
                                                 <div class="mobile-date">
-                                                    {{ day.weekday_name|slice:":3" }}
+                                                    {{ day.weekday_name[:3] }}
                                                 </div>
                                                 
                                                 {% if day.status == 'available' %}

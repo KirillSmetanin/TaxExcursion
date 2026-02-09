@@ -58,6 +58,7 @@ def init_database():
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Создаем таблицу если ее нет
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS bookings (
                 id SERIAL PRIMARY KEY,
@@ -74,6 +75,30 @@ def init_database():
                 status VARCHAR(20) DEFAULT 'pending'
             )
         ''')
+        
+        # Проверяем и добавляем отсутствующие колонки
+        try:
+            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'bookings'")
+            existing_columns = [row[0] for row in cursor.fetchall()]
+            
+            # Добавляем колонку status если её нет
+            if 'status' not in existing_columns:
+                print("⚠️ Добавляем колонку 'status'...")
+                cursor.execute('''
+                    ALTER TABLE bookings 
+                    ADD COLUMN status VARCHAR(20) DEFAULT 'pending'
+                ''')
+            
+            # Добавляем колонку additional_info если её нет
+            if 'additional_info' not in existing_columns:
+                print("⚠️ Добавляем колонку 'additional_info'...")
+                cursor.execute('''
+                    ALTER TABLE bookings 
+                    ADD COLUMN additional_info TEXT
+                ''')
+            
+        except Exception as e:
+            print(f"⚠️ Ошибка проверки колонок: {e}")
         
         conn.commit()
         cursor.close()
@@ -98,12 +123,30 @@ def get_bookings_count_by_date():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute('''
-            SELECT excursion_date::text, COUNT(*) as count 
-            FROM bookings 
-            WHERE status != 'cancelled'
-            GROUP BY excursion_date
-        ''')
+        # Проверяем существование колонки status
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'bookings' AND column_name = 'status'
+            )
+        """)
+        has_status_column = cursor.fetchone()[0]
+        
+        if has_status_column:
+            # Используем запрос с проверкой статуса
+            cursor.execute('''
+                SELECT excursion_date::text, COUNT(*) as count 
+                FROM bookings 
+                WHERE status != 'cancelled' OR status IS NULL
+                GROUP BY excursion_date
+            ''')
+        else:
+            # Используем старый запрос без status
+            cursor.execute('''
+                SELECT excursion_date::text, COUNT(*) as count 
+                FROM bookings 
+                GROUP BY excursion_date
+            ''')
         
         booked_dates = {}
         for row in cursor.fetchall():
@@ -578,6 +621,95 @@ def admin():
             <h1>Ошибка админ-панели</h1>
             <pre>{str(e)}</pre>
             <a href="/">На главную</a>
+        </body>
+        </html>
+        ''', 500
+    
+@app.route('/admin/migrate')
+@admin_required
+def migrate_database_route():
+    """Принудительная миграция БД через веб-интерфейс"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        result = []
+        
+        # Добавляем колонку status если её нет
+        try:
+            cursor.execute('''
+                ALTER TABLE bookings 
+                ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'
+            ''')
+            result.append("✅ Колонка 'status' добавлена или уже существует")
+        except Exception as e:
+            result.append(f"❌ Ошибка добавления 'status': {e}")
+        
+        # Добавляем колонку additional_info если её нет
+        try:
+            cursor.execute('''
+                ALTER TABLE bookings 
+                ADD COLUMN IF NOT EXISTS additional_info TEXT
+            ''')
+            result.append("✅ Колонка 'additional_info' добавлена или уже существует")
+        except Exception as e:
+            result.append(f"❌ Ошибка добавления 'additional_info': {e}")
+        
+        # Обновляем существующие записи
+        try:
+            cursor.execute("UPDATE bookings SET status = 'pending' WHERE status IS NULL")
+            updated = cursor.rowcount
+            result.append(f"✅ Обновлено {updated} записей (установлен status='pending')")
+        except Exception as e:
+            result.append(f"⚠️ Не удалось обновить записи: {e}")
+        
+        conn.commit()
+        
+        # Проверяем структуру
+        cursor.execute("SELECT COUNT(*) FROM bookings")
+        total = cursor.fetchone()[0]
+        result.append(f"📊 Всего записей в базе: {total}")
+        
+        cursor.close()
+        conn.close()
+        
+        # Отображаем результаты
+        html_result = "<br>".join(result)
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Миграция базы данных</title>
+            <style>
+                body {{ font-family: Arial; padding: 40px; background: #f5f5f5; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+                .success {{ color: #2ecc71; }}
+                .error {{ color: #e74c3c; }}
+                .info {{ color: #3498db; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🔧 Миграция базы данных</h1>
+                <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+                    {html_result}
+                </div>
+                <a href="/admin" class="btn">Вернуться в админ-панель</a>
+                <a href="/admin/migrate" class="btn" style="background: #2ecc71;">Повторить проверку</a>
+            </div>
+        </body>
+        </html>
+        '''
+        
+    except Exception as e:
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h1 style="color: #e74c3c;">❌ Ошибка миграции</h1>
+            <p>{str(e)}</p>
+            <a href="/admin">Вернуться в админ-панель</a>
         </body>
         </html>
         ''', 500

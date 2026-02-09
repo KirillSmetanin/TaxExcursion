@@ -2,7 +2,7 @@ services:
   - type: web
     name: tax-excursion
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: bash render-build.sh
     startCommand: gunicorn app:app
     envVars:
       - key: SECRET_KEY

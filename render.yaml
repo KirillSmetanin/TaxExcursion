@@ -9,12 +9,14 @@ services:
         generateValue: true
       - key: DATABASE_URL
         fromDatabase:
-          name: bookings-db
+          name: tax-excursion-db
           property: connectionString
     healthCheckPath: /health
+    domains:
+      - taxexcursion.ru  # ЗАМЕНИТЕ НА ВАШ ДОМЕН
 
 databases:
-  - name: bookings-db
-    plan: free
-    databaseName: bookings
-    user: bookings_user
+  - name: tax-excursion-db
+    plan: free  # Бесплатный тариф PostgreSQL
+    databaseName: tax_excursion
+    user: tax_excursion_user

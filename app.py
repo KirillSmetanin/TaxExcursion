@@ -1,13 +1,16 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, send_file, session, jsonify
 import os
 from datetime import datetime, timedelta, date
 import calendar
 import psycopg
 from psycopg.rows import dict_row
 import urllib.parse
+from io import BytesIO
+import pandas as pd
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-12345')
+app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'YFNS_BOT_Password123')
 
 # Русские названия месяцев
 RUSSIAN_MONTHS = [
@@ -66,8 +69,9 @@ def init_database():
                 contact_person VARCHAR(200) NOT NULL,
                 contact_phone VARCHAR(20) NOT NULL,
                 participants_count INTEGER NOT NULL,
-                booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                -- УБРАЛИ UNIQUE(excursion_date) чтобы разрешить 2 записи на день
+                booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                additional_info TEXT,
+                status VARCHAR(20) DEFAULT 'pending'
             )
         ''')
         
@@ -97,6 +101,7 @@ def get_bookings_count_by_date():
         cursor.execute('''
             SELECT excursion_date::text, COUNT(*) as count 
             FROM bookings 
+            WHERE status != 'cancelled'
             GROUP BY excursion_date
         ''')
         
@@ -228,7 +233,7 @@ def index():
                 
                 <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
                     <h3>Тестовые ссылки:</h3>
-                    <p><a href="/admin">Админ-панель</a></p>
+                    <p><a href="/admin/login">Админ-панель</a></p>
                     <p><a href="/health">Проверка работоспособности</a></p>
                 </div>
             </div>
@@ -330,6 +335,7 @@ def submit_booking():
         contact_person = request.form.get('contact_person')
         contact_phone = request.form.get('contact_phone')
         participants_count = request.form.get('participants_count')
+        additional_info = request.form.get('additional_info', '')
         
         # Валидация
         if not all([excursion_date, username, school_name, class_number, 
@@ -364,17 +370,17 @@ def submit_booking():
             </html>
             '''
         
-        # Сохраняем в БД (без ON CONFLICT, так как убрали уникальность)
+        # Сохраняем в БД
         conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
             INSERT INTO bookings 
             (username, school_name, class_number, class_profile, 
-             excursion_date, contact_person, contact_phone, participants_count)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+             excursion_date, contact_person, contact_phone, participants_count, additional_info)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         ''', (username, school_name, class_number, class_profile,
-              excursion_date, contact_person, contact_phone, int(participants_count)))
+              excursion_date, contact_person, contact_phone, int(participants_count), additional_info))
         
         conn.commit()
         cursor.close()
@@ -401,26 +407,143 @@ def submit_booking():
         </html>
         ''', 500
 
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Вход в админку"""
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if password == app.config['ADMIN_PASSWORD']:
+            session['admin_logged_in'] = True
+            return redirect('/admin')
+        else:
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ Неверный пароль</h1>
+                <a href="/admin/login">Попробовать снова</a>
+            </body>
+            </html>
+            '''
+    
+    return '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Вход в админ-панель</title>
+        <style>
+            body { font-family: Arial; padding: 40px; text-align: center; background: #f5f5f5; }
+            .login-box { max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+            input[type="password"] { width: 100%; padding: 12px; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
+            button { background: #3498db; color: white; border: none; padding: 12px 30px; border-radius: 5px; cursor: pointer; }
+        </style>
+    </head>
+    <body>
+        <div class="login-box">
+            <h1>Вход в админ-панель</h1>
+            <form method="POST">
+                <input type="password" name="password" placeholder="Пароль" required>
+                <br>
+                <button type="submit">Войти</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    '''
+
+@app.route('/admin/logout')
+def admin_logout():
+    """Выход из админки"""
+    session.pop('admin_logged_in', None)
+    return redirect('/')
+
+def admin_required(f):
+    """Декоратор для проверки авторизации админа"""
+    from functools import wraps
+    
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect('/admin/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/admin')
+@admin_required
 def admin():
     """Админ-панель"""
     check_and_init_db()
     
     try:
+        # Фильтрация
+        status_filter = request.args.get('status', 'all')
+        date_filter = request.args.get('date', '')
+        
         conn = get_db_connection()
         cursor = conn.cursor(row_factory=dict_row)
-        cursor.execute('''
+        
+        query = '''
             SELECT id, username, school_name, class_number, class_profile,
                    excursion_date, contact_person, contact_phone, 
-                   participants_count, booking_date
+                   participants_count, booking_date, status, additional_info
             FROM bookings 
-            ORDER BY excursion_date DESC
-        ''')
+        '''
+        params = []
+        where_clauses = []
+        
+        if status_filter != 'all':
+            where_clauses.append('status = %s')
+            params.append(status_filter)
+        
+        if date_filter:
+            where_clauses.append('excursion_date = %s')
+            params.append(date_filter)
+        
+        if where_clauses:
+            query += ' WHERE ' + ' AND '.join(where_clauses)
+        
+        query += ' ORDER BY excursion_date DESC, booking_date DESC'
+        
+        cursor.execute(query, params)
         bookings = cursor.fetchall()
+        
+        # Статистика
+        cursor.execute('SELECT COUNT(*) as total FROM bookings')
+        total = cursor.fetchone()['total']
+        
+        cursor.execute('SELECT COUNT(*) as pending FROM bookings WHERE status = %s', ('pending',))
+        pending = cursor.fetchone()['pending']
+        
+        cursor.execute('SELECT COUNT(*) as confirmed FROM bookings WHERE status = %s', ('confirmed',))
+        confirmed = cursor.fetchone()['confirmed']
+        
+        cursor.execute('SELECT COUNT(*) as cancelled FROM bookings WHERE status = %s', ('cancelled',))
+        cancelled = cursor.fetchone()['cancelled']
+        
+        cursor.execute('''
+            SELECT excursion_date, COUNT(*) as count 
+            FROM bookings 
+            WHERE excursion_date >= CURRENT_DATE 
+            AND status != 'cancelled'
+            GROUP BY excursion_date 
+            ORDER BY excursion_date
+        ''')
+        upcoming = cursor.fetchall()
+        
         cursor.close()
         conn.close()
         
-        return render_template('admin.html', bookings=bookings)
+        return render_template('admin.html', 
+                             bookings=bookings,
+                             status_filter=status_filter,
+                             date_filter=date_filter,
+                             stats={
+                                 'total': total,
+                                 'pending': pending,
+                                 'confirmed': confirmed,
+                                 'cancelled': cancelled,
+                                 'upcoming': upcoming
+                             })
     except Exception as e:
         return f'''
         <!DOCTYPE html>
@@ -433,11 +556,159 @@ def admin():
         </html>
         ''', 500
 
+@app.route('/admin/export')
+@admin_required
+def export_bookings():
+    """Экспорт записей в Excel"""
+    try:
+        conn = get_db_connection()
+        
+        # Получаем данные
+        query = '''
+            SELECT 
+                id,
+                username,
+                school_name,
+                class_number,
+                class_profile,
+                excursion_date,
+                contact_person,
+                contact_phone,
+                participants_count,
+                booking_date,
+                status,
+                additional_info
+            FROM bookings 
+            ORDER BY excursion_date DESC
+        '''
+        
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        
+        # Русские названия колонок
+        df.columns = [
+            'ID',
+            'ФИО ответственного',
+            'Учебное заведение',
+            'Класс/Курс',
+            'Профиль класса',
+            'Дата экскурсии',
+            'Контактное лицо в УФНС',
+            'Контактный телефон',
+            'Количество участников',
+            'Дата и время записи',
+            'Статус',
+            'Дополнительная информация'
+        ]
+        
+        # Преобразуем статусы
+        status_mapping = {
+            'pending': 'Ожидание',
+            'confirmed': 'Подтверждено',
+            'cancelled': 'Отменено'
+        }
+        df['Статус'] = df['Статус'].map(status_mapping).fillna(df['Статус'])
+        
+        # Создаем Excel файл в памяти
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Записи на экскурсии', index=False)
+            
+            # Настройка ширины колонок
+            worksheet = writer.sheets['Записи на экскурсии']
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 30)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        output.seek(0)
+        
+        # Генерируем имя файла с текущей датой
+        filename = f'bookings_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.xlsx'
+        
+        return send_file(
+            output,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+    except Exception as e:
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h1 style="color: #e74c3c;">❌ Ошибка экспорта</h1>
+            <p>{str(e)}</p>
+            <a href="/admin">Вернуться в админ-панель</a>
+        </body>
+        </html>
+        ''', 500
+
+@app.route('/admin/edit/<int:booking_id>', methods=['GET', 'POST'])
+@admin_required
+def edit_booking(booking_id):
+    """Редактирование записи"""
+    conn = get_db_connection()
+    cursor = conn.cursor(row_factory=dict_row)
+    
+    if request.method == 'POST':
+        # Обновляем запись
+        school_name = request.form.get('school_name')
+        class_number = request.form.get('class_number')
+        class_profile = request.form.get('class_profile')
+        excursion_date = request.form.get('excursion_date')
+        contact_person = request.form.get('contact_person')
+        contact_phone = request.form.get('contact_phone')
+        participants_count = request.form.get('participants_count')
+        status = request.form.get('status')
+        additional_info = request.form.get('additional_info')
+        
+        cursor.execute('''
+            UPDATE bookings SET
+                school_name = %s,
+                class_number = %s,
+                class_profile = %s,
+                excursion_date = %s,
+                contact_person = %s,
+                contact_phone = %s,
+                participants_count = %s,
+                status = %s,
+                additional_info = %s
+            WHERE id = %s
+        ''', (school_name, class_number, class_profile, excursion_date,
+              contact_person, contact_phone, participants_count, status,
+              additional_info, booking_id))
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+        return redirect('/admin')
+    
+    # Получаем запись для редактирования
+    cursor.execute('SELECT * FROM bookings WHERE id = %s', (booking_id,))
+    booking = cursor.fetchone()
+    
+    cursor.close()
+    conn.close()
+    
+    if not booking:
+        return redirect('/admin')
+    
+    return render_template('edit_booking.html', booking=booking)
+
 @app.route('/admin/delete/<int:booking_id>', methods=['POST'])
+@admin_required
 def delete_booking(booking_id):
     """Удаление записи"""
-    check_and_init_db()
-    
     if request.method == 'POST':
         try:
             conn = get_db_connection()
@@ -451,66 +722,23 @@ def delete_booking(booking_id):
     
     return redirect('/admin')
 
-@app.route('/test')
-def test():
-    """Тестовая страница с добавлением тестовых данных"""
-    check_and_init_db()
+@app.route('/admin/update_status/<int:booking_id>', methods=['POST'])
+@admin_required
+def update_status(booking_id):
+    """Обновление статуса записи"""
+    if request.method == 'POST':
+        status = request.form.get('status')
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('UPDATE bookings SET status = %s WHERE id = %s', (status, booking_id))
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"Ошибка обновления статуса: {e}")
     
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Добавляем тестовые записи на ближайшие даты
-        today = date.today()
-        test_dates = [
-            today.strftime('%Y-%m-%d'),
-            (today + timedelta(days=1)).strftime('%Y-%m-%d'),
-            (today + timedelta(days=3)).strftime('%Y-%m-%d'),
-            (today + timedelta(days=7)).strftime('%Y-%m-%d'),
-        ]
-        
-        for date_str in test_dates:
-            cursor.execute('''
-                INSERT INTO bookings 
-                (username, school_name, class_number, excursion_date, 
-                 contact_person, contact_phone, participants_count)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (excursion_date) DO NOTHING
-            ''', ('Тестовый пользователь', 'Школа №1', '10А', 
-                  date_str, 'Иванов И.И.', '+79001234567', 20))
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial; padding: 40px; text-align: center;">
-            <h1 style="color: #2ecc71;">✅ Тестовые данные добавлены!</h1>
-            <p>Добавлены записи на ближайшие даты</p>
-            <div style="margin-top: 30px;">
-                <a href="/" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
-                    Вернуться к календарю
-                </a>
-                <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #2ecc71; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
-                    Посмотреть все записи
-                </a>
-            </div>
-        </body>
-        </html>
-        '''
-    except Exception as e:
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial; padding: 40px; text-align: center;">
-            <h1 style="color: #e74c3c;">❌ Ошибка</h1>
-            <p>{str(e)}</p>
-            <a href="/">Вернуться</a>
-        </body>
-        </html>
-        ''', 500
+    return redirect('/admin')
 
 @app.route('/health')
 def health():
@@ -538,50 +766,6 @@ def health():
             'database': 'disconnected',
             'error': str(e)
         }, 500
-
-@app.route('/clear_test')
-def clear_test():
-    """Очистка тестовых данных"""
-    check_and_init_db()
-    
-    if os.environ.get('RENDER') != 'true':  # На продакшене отключаем
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM bookings WHERE username = 'Тестовый пользователь'")
-            conn.commit()
-            cursor.close()
-            conn.close()
-            return '''
-            <!DOCTYPE html>
-            <html>
-            <body style="font-family: Arial; padding: 40px; text-align: center;">
-                <h1 style="color: #2ecc71;">✅ Тестовые данные очищены</h1>
-                <a href="/admin">Вернуться в админ-панель</a>
-            </body>
-            </html>
-            '''
-        except Exception as e:
-            return f'''
-            <!DOCTYPE html>
-            <html>
-            <body style="font-family: Arial; padding: 40px; text-align: center;">
-                <h1 style="color: #e74c3c;">❌ Ошибка очистки</h1>
-                <p>{str(e)}</p>
-                <a href="/admin">Вернуться</a>
-            </body>
-            </html>
-            '''
-    
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <body style="font-family: Arial; padding: 40px; text-align: center;">
-        <h1 style="color: #e74c3c;">❌ Недоступно на продакшене</h1>
-        <a href="/admin">Вернуться</a>
-    </body>
-    </html>
-    '''
 
 if __name__ == '__main__':
     # Инициализируем БД при запуске

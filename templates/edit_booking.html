@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Редактирование записи #{{ booking.id }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); color: white; padding: 25px; }
+        .header h1 { font-size: 1.8em; margin-bottom: 10px; }
+        .content { padding: 30px; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50; }
+        .form-group input, .form-group select, .form-group textarea { 
+            width: 100%; padding: 12px 15px; border: 2px solid #ddd; border-radius: 10px; 
+            font-size: 1em; transition: all 0.3s; font-family: inherit; 
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { 
+            border-color: #3498db; outline: none; box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2); 
+        }
+        .form-row { display: flex; gap: 20px; }
+        .form-row .form-group { flex: 1; }
+        .btn-group { display: flex; gap: 15px; margin-top: 30px; }
+        .btn { padding: 12px 30px; border-radius: 10px; font-size: 1em; font-weight: bold; text-decoration: none; transition: all 0.3s; border: none; cursor: pointer; }
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; transform: translateY(-2px); }
+        .btn-secondary { background: #95a5a6; color: white; }
+        .btn-secondary:hover { background: #7f8c8d; transform: translateY(-2px); }
+        .btn-success { background: #2ecc71; color: white; }
+        .btn-success:hover { background: #27ae60; transform: translateY(-2px); }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; transform: translateY(-2px); }
+        .status-badge { padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.9em; }
+        .status-pending { background: #f1c40f; color: #000; }
+        .status-confirmed { background: #2ecc71; color: white; }
+        .status-cancelled { background: #e74c3c; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Редактирование записи #{{ booking.id }}</h1>
+            <p>Дата создания: {{ booking.booking_date }}</p>
+        </div>
+        
+        <div class="content">
+            <form method="POST">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Статус записи</label>
+                        <select name="status" required>
+                            <option value="pending" {% if booking.status == 'pending' %}selected{% endif %}>Ожидание</option>
+                            <option value="confirmed" {% if booking.status == 'confirmed' %}selected{% endif %}>Подтверждено</option>
+                            <option value="cancelled" {% if booking.status == 'cancelled' %}selected{% endif %}>Отменено</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Дата экскурсии</label>
+                        <input type="date" name="excursion_date" value="{{ booking.excursion_date }}" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>ФИО ответственного лица</label>
+                        <input type="text" name="username" value="{{ booking.username }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Контактный телефон</label>
+                        <input type="tel" name="contact_phone" value="{{ booking.contact_phone }}" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Название учебного заведения</label>
+                    <input type="text" name="school_name" value="{{ booking.school_name }}" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Класс/курс</label>
+                        <input type="text" name="class_number" value="{{ booking.class_number }}" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Профиль класса (если есть)</label>
+                        <input type="text" name="class_profile" value="{{ booking.class_profile }}">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Контактное лицо в УФНС</label>
+                    <input type="text" name="contact_person" value="{{ booking.contact_person }}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Количество участников</label>
+                    <input type="number" name="participants_count" value="{{ booking.participants_count }}" min="1" max="20" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Дополнительная информация</label>
+                    <textarea name="additional_info" rows="4">{{ booking.additional_info }}</textarea>
+                </div>
+                
+                <div class="btn-group">
+                    <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                    <a href="/admin" class="btn btn-secondary">Отмена</a>
+                </div>
+            </form>
+            
+            <div class="btn-group" style="margin-top: 20px;">
+                <form action="/admin/update_status/{{ booking.id }}" method="POST" style="flex: 1;">
+                    <input type="hidden" name="status" value="confirmed">
+                    <button type="submit" class="btn btn-success" style="width: 100%;">Подтвердить запись</button>
+                </form>
+                <form action="/admin/update_status/{{ booking.id }}" method="POST" style="flex: 1;">
+                    <input type="hidden" name="status" value="cancelled">
+                    <button type="submit" class="btn btn-danger" style="width: 100%;">Отменить запись</button>
+                </form>
+                <form action="/admin/delete/{{ booking.id }}" method="POST" style="flex: 1;" onsubmit="return confirm('Удалить эту запись?')">
+                    <button type="submit" class="btn" style="background: #7f8c8d; color: white; width: 100%;">Удалить запись</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

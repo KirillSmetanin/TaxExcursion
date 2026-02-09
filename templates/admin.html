@@ -6,31 +6,164 @@
     <title>Админ-панель</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Аналогичные стили как в index.html, но упрощенные */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f5f5f5; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); overflow: hidden; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); overflow: hidden; }
         .header { background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); color: white; padding: 25px; }
         .header h1 { font-size: 2em; margin-bottom: 10px; }
         .content { padding: 30px; }
+        
+        /* Фильтры */
+        .filters { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px; }
+        .filter-group { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+        .filter-group select, .filter-group input { padding: 10px 15px; border: 2px solid #ddd; border-radius: 5px; }
+        .btn-filter { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .btn-filter:hover { background: #2980b9; }
+        
+        /* Статистика */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 3px 10px rgba(0,0,0,0.1); text-align: center; }
+        .stat-card h3 { color: #666; font-size: 0.9em; margin-bottom: 10px; }
+        .stat-value { font-size: 2em; font-weight: bold; }
+        .stat-total { color: #3498db; }
+        .stat-pending { color: #f1c40f; }
+        .stat-confirmed { color: #2ecc71; }
+        .stat-cancelled { color: #e74c3c; }
+        
+        /* Таблица */
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { background: #2c3e50; color: white; padding: 15px; text-align: left; }
+        th { background: #2c3e50; color: white; padding: 15px; text-align: left; position: sticky; top: 0; }
         td { padding: 12px 15px; border-bottom: 1px solid #eee; }
         tr:hover { background: #f8f9fa; }
-        .badge { padding: 3px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold; }
-        .badge-success { background: #d4edda; color: #155724; }
-        .btn-back { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; }
+        
+        /* Бейджи статусов */
+        .badge { padding: 5px 10px; border-radius: 15px; font-size: 0.8em; font-weight: bold; }
+        .badge-pending { background: #f1c40f; color: #000; }
+        .badge-confirmed { background: #2ecc71; color: white; }
+        .badge-cancelled { background: #e74c3c; color: white; }
+        
+        /* Кнопки действий */
+        .action-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
+        .btn-action { padding: 5px 10px; border-radius: 5px; text-decoration: none; font-size: 0.8em; color: white; }
+        .btn-edit { background: #3498db; }
+        .btn-edit:hover { background: #2980b9; }
+        .btn-delete { background: #e74c3c; }
+        .btn-delete:hover { background: #c0392b; }
+        .btn-status { background: #2ecc71; }
+        .btn-status:hover { background: #27ae60; }
+        
+        /* Панель управления */
+        .control-panel { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px; }
+        .control-buttons { display: flex; gap: 15px; flex-wrap: wrap; }
+        .btn-control { display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; background: #2c3e50; color: white; text-decoration: none; border-radius: 5px; }
+        .btn-control:hover { background: #34495e; transform: translateY(-2px); }
+        
         .empty-state { text-align: center; padding: 50px; color: #666; }
         .empty-state i { font-size: 3em; margin-bottom: 20px; opacity: 0.3; }
+        
+        /* Ближайшие экскурсии */
+        .upcoming-list { margin-top: 30px; }
+        .upcoming-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #f8f9fa; border-radius: 8px; margin-bottom: 10px; }
+        .upcoming-date { font-weight: bold; color: #2c3e50; }
+        .upcoming-count { background: #3498db; color: white; padding: 3px 10px; border-radius: 15px; font-size: 0.8em; }
+        
+        /* Адаптивность */
+        @media (max-width: 768px) {
+            .stats-grid { grid-template-columns: 1fr; }
+            .filter-group { flex-direction: column; align-items: stretch; }
+            table { font-size: 0.9em; }
+            th, td { padding: 8px; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1><i class="fas fa-cog"></i> Админ-панель</h1>
-            <p>Управление записями на экскурсии</p>
+            <p>Управление записями на экскурсии | <a href="/admin/logout" style="color: white; text-decoration: underline;">Выйти</a></p>
         </div>
+        
         <div class="content">
+            <!-- Панель управления -->
+            <div class="control-panel">
+                <h2><i class="fas fa-tachometer-alt"></i> Панель управления</h2>
+                <div class="control-buttons">
+                    <a href="/admin/export" class="btn-control">
+                        <i class="fas fa-file-excel"></i> Экспорт в Excel
+                    </a>
+                    <a href="/admin?status=pending" class="btn-control">
+                        <i class="fas fa-clock"></i> Ожидающие ({{ stats.pending }})
+                    </a>
+                    <a href="/admin?status=confirmed" class="btn-control">
+                        <i class="fas fa-check-circle"></i> Подтвержденные ({{ stats.confirmed }})
+                    </a>
+                    <a href="/" class="btn-control">
+                        <i class="fas fa-calendar"></i> Перейти к календарю
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Статистика -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Всего записей</h3>
+                    <div class="stat-value stat-total">{{ stats.total }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Ожидают подтверждения</h3>
+                    <div class="stat-value stat-pending">{{ stats.pending }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Подтверждено</h3>
+                    <div class="stat-value stat-confirmed">{{ stats.confirmed }}</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Отменено</h3>
+                    <div class="stat-value stat-cancelled">{{ stats.cancelled }}</div>
+                </div>
+            </div>
+            
+            <!-- Фильтры -->
+            <div class="filters">
+                <form method="GET" action="/admin" class="filter-group">
+                    <div>
+                        <label>Статус:</label>
+                        <select name="status">
+                            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>Все</option>
+                            <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Ожидание</option>
+                            <option value="confirmed" {% if status_filter == 'confirmed' %}selected{% endif %}>Подтверждено</option>
+                            <option value="cancelled" {% if status_filter == 'cancelled' %}selected{% endif %}>Отменено</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Дата экскурсии:</label>
+                        <input type="date" name="date" value="{{ date_filter }}">
+                    </div>
+                    <div>
+                        <button type="submit" class="btn-filter">
+                            <i class="fas fa-filter"></i> Применить фильтры
+                        </button>
+                        <a href="/admin" class="btn-filter" style="background: #95a5a6;">
+                            <i class="fas fa-redo"></i> Сбросить
+                        </a>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Ближайшие экскурсии -->
+            {% if stats.upcoming %}
+            <div class="upcoming-list">
+                <h3><i class="fas fa-calendar-alt"></i> Ближайшие экскурсии</h3>
+                {% for item in stats.upcoming %}
+                <div class="upcoming-item">
+                    <span class="upcoming-date">{{ item.excursion_date }}</span>
+                    <span class="upcoming-count">{{ item.count }} групп(а)</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- Таблица записей -->
             <h2><i class="fas fa-list"></i> Все записи</h2>
             {% if bookings %}
             <table>
@@ -41,8 +174,8 @@
                         <th>Школа</th>
                         <th>Класс</th>
                         <th>Контактное лицо</th>
-                        <th>Участников</th>
-                        <th>Дата записи</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -52,9 +185,39 @@
                         <td><strong>{{ booking['excursion_date'] }}</strong></td>
                         <td>{{ booking['school_name'] }}</td>
                         <td>{{ booking['class_number'] }}</td>
-                        <td>{{ booking['contact_person'] }}<br><small>{{ booking['contact_phone'] }}</small></td>
-                        <td><span class="badge badge-success">{{ booking['participants_count'] }} чел.</span></td>
-                        <td>{{ booking['booking_date'] }}</td>
+                        <td>{{ booking['contact_person'] }}<br>
+                            <small>{{ booking['contact_phone'] }}</small><br>
+                            <small>{{ booking['participants_count'] }} чел.</small>
+                        </td>
+                        <td>
+                            {% if booking['status'] == 'pending' %}
+                                <span class="badge badge-pending">Ожидание</span>
+                            {% elif booking['status'] == 'confirmed' %}
+                                <span class="badge badge-confirmed">Подтверждено</span>
+                            {% elif booking['status'] == 'cancelled' %}
+                                <span class="badge badge-cancelled">Отменено</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="action-buttons">
+                                <a href="/admin/edit/{{ booking['id'] }}" class="btn-action btn-edit">
+                                    <i class="fas fa-edit"></i> Редактировать
+                                </a>
+                                {% if booking['status'] != 'confirmed' %}
+                                <form action="/admin/update_status/{{ booking['id'] }}" method="POST" style="display: inline;">
+                                    <input type="hidden" name="status" value="confirmed">
+                                    <button type="submit" class="btn-action btn-status" style="border: none; cursor: pointer;">
+                                        <i class="fas fa-check"></i> Подтвердить
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <form action="/admin/delete/{{ booking['id'] }}" method="POST" style="display: inline;" onsubmit="return confirm('Удалить запись #{{ booking['id'] }}?')">
+                                    <button type="submit" class="btn-action btn-delete" style="border: none; cursor: pointer;">
+                                        <i class="fas fa-trash"></i> Удалить
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -66,7 +229,6 @@
                 <p>Записи на экскурсии пока отсутствуют</p>
             </div>
             {% endif %}
-            <a href="/" class="btn-back"><i class="fas fa-arrow-left"></i> Вернуться к календарю</a>
         </div>
     </div>
 </body>

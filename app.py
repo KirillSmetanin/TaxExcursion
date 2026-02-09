@@ -1,12 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_file, session, make_response
 import os
 from datetime import datetime, timedelta, date
 import calendar
 import psycopg
 from psycopg.rows import dict_row
 import urllib.parse
-from io import BytesIO
-import pandas as pd
+import csv
+import io
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-12345')
@@ -189,6 +189,7 @@ def generate_calendar_data(year=None, month=None):
     
     return calendar_data
 
+# Маршруты для пользовательской части (оставляем без изменений)
 @app.route('/')
 def index():
     """Главная страница"""
@@ -407,6 +408,10 @@ def submit_booking():
         </html>
         ''', 500
 
+# ------------------------------------------------------------
+# АДМИН-ЧАСТЬ
+# ------------------------------------------------------------
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Вход в админку"""
@@ -471,17 +476,20 @@ def admin_required(f):
 @app.route('/admin')
 @admin_required
 def admin():
-    """Админ-панель"""
+    """Админ-панель с фильтрацией и статистикой"""
     check_and_init_db()
     
     try:
         # Фильтрация
         status_filter = request.args.get('status', 'all')
-        date_filter = request.args.get('date', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        search = request.args.get('search', '')
         
         conn = get_db_connection()
         cursor = conn.cursor(row_factory=dict_row)
         
+        # Базовый запрос
         query = '''
             SELECT id, username, school_name, class_number, class_profile,
                    excursion_date, contact_person, contact_phone, 
@@ -495,9 +503,23 @@ def admin():
             where_clauses.append('status = %s')
             params.append(status_filter)
         
-        if date_filter:
-            where_clauses.append('excursion_date = %s')
-            params.append(date_filter)
+        if date_from:
+            where_clauses.append('excursion_date >= %s')
+            params.append(date_from)
+        
+        if date_to:
+            where_clauses.append('excursion_date <= %s')
+            params.append(date_to)
+        
+        if search:
+            where_clauses.append('''
+                (school_name ILIKE %s OR 
+                 username ILIKE %s OR 
+                 contact_person ILIKE %s OR 
+                 contact_phone ILIKE %s)
+            ''')
+            search_term = f'%{search}%'
+            params.extend([search_term, search_term, search_term, search_term])
         
         if where_clauses:
             query += ' WHERE ' + ' AND '.join(where_clauses)
@@ -520,15 +542,17 @@ def admin():
         cursor.execute('SELECT COUNT(*) as cancelled FROM bookings WHERE status = %s', ('cancelled',))
         cancelled = cursor.fetchone()['cancelled']
         
+        # Статистика по месяцам
         cursor.execute('''
-            SELECT excursion_date, COUNT(*) as count 
+            SELECT 
+                DATE_TRUNC('month', excursion_date) as month,
+                COUNT(*) as count
             FROM bookings 
-            WHERE excursion_date >= CURRENT_DATE 
-            AND status != 'cancelled'
-            GROUP BY excursion_date 
-            ORDER BY excursion_date
+            WHERE excursion_date >= CURRENT_DATE - INTERVAL '6 months'
+            GROUP BY DATE_TRUNC('month', excursion_date)
+            ORDER BY month DESC
         ''')
-        upcoming = cursor.fetchall()
+        monthly_stats = cursor.fetchall()
         
         cursor.close()
         conn.close()
@@ -536,13 +560,15 @@ def admin():
         return render_template('admin.html', 
                              bookings=bookings,
                              status_filter=status_filter,
-                             date_filter=date_filter,
+                             date_from=date_from,
+                             date_to=date_to,
+                             search=search,
                              stats={
                                  'total': total,
                                  'pending': pending,
                                  'confirmed': confirmed,
                                  'cancelled': cancelled,
-                                 'upcoming': upcoming
+                                 'monthly_stats': monthly_stats
                              })
     except Exception as e:
         return f'''
@@ -556,37 +582,28 @@ def admin():
         </html>
         ''', 500
 
-@app.route('/admin/export')
+@app.route('/admin/export/csv')
 @admin_required
-def export_bookings():
-    """Экспорт записей в Excel"""
+def export_bookings_csv():
+    """Экспорт записей в CSV"""
     try:
         conn = get_db_connection()
+        cursor = conn.cursor(row_factory=dict_row)
         
-        # Получаем данные
-        query = '''
-            SELECT 
-                id,
-                username,
-                school_name,
-                class_number,
-                class_profile,
-                excursion_date,
-                contact_person,
-                contact_phone,
-                participants_count,
-                booking_date,
-                status,
-                additional_info
-            FROM bookings 
-            ORDER BY excursion_date DESC
-        '''
-        
-        df = pd.read_sql_query(query, conn)
+        # Получаем все записи
+        cursor.execute('''
+            SELECT * FROM bookings 
+            ORDER BY excursion_date DESC, booking_date DESC
+        ''')
+        bookings = cursor.fetchall()
         conn.close()
         
-        # Русские названия колонок
-        df.columns = [
+        # Создаем CSV в памяти
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+        
+        # Заголовки
+        headers = [
             'ID',
             'ФИО ответственного',
             'Учебное заведение',
@@ -600,45 +617,40 @@ def export_bookings():
             'Статус',
             'Дополнительная информация'
         ]
+        writer.writerow(headers)
         
-        # Преобразуем статусы
+        # Данные
         status_mapping = {
             'pending': 'Ожидание',
             'confirmed': 'Подтверждено',
             'cancelled': 'Отменено'
         }
-        df['Статус'] = df['Статус'].map(status_mapping).fillna(df['Статус'])
         
-        # Создаем Excel файл в памяти
-        output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, sheet_name='Записи на экскурсии', index=False)
-            
-            # Настройка ширины колонок
-            worksheet = writer.sheets['Записи на экскурсии']
-            for column in worksheet.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 30)
-                worksheet.column_dimensions[column_letter].width = adjusted_width
+        for booking in bookings:
+            row = [
+                booking['id'],
+                booking['username'],
+                booking['school_name'],
+                booking['class_number'],
+                booking['class_profile'],
+                booking['excursion_date'],
+                booking['contact_person'],
+                booking['contact_phone'],
+                booking['participants_count'],
+                booking['booking_date'],
+                status_mapping.get(booking['status'], booking['status']),
+                booking.get('additional_info', '')
+            ]
+            writer.writerow(row)
         
         output.seek(0)
         
-        # Генерируем имя файла с текущей датой
-        filename = f'bookings_{datetime.now().strftime("%Y-%m-%d_%H-%M")}.xlsx'
+        # Создаем response
+        response = make_response(output.getvalue())
+        response.headers["Content-Disposition"] = f"attachment; filename=bookings_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.csv"
+        response.headers["Content-type"] = "text/csv; charset=utf-8"
         
-        return send_file(
-            output,
-            as_attachment=True,
-            download_name=filename,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        )
+        return response
         
     except Exception as e:
         return f'''
@@ -651,6 +663,36 @@ def export_bookings():
         </body>
         </html>
         ''', 500
+
+@app.route('/admin/export/json')
+@admin_required
+def export_bookings_json():
+    """Экспорт записей в JSON"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(row_factory=dict_row)
+        
+        cursor.execute('''
+            SELECT * FROM bookings 
+            ORDER BY excursion_date DESC, booking_date DESC
+        ''')
+        bookings = cursor.fetchall()
+        conn.close()
+        
+        # Преобразуем в JSON
+        import json
+        output = io.StringIO()
+        json.dump(bookings, output, ensure_ascii=False, indent=2, default=str)
+        output.seek(0)
+        
+        response = make_response(output.getvalue())
+        response.headers["Content-Disposition"] = f"attachment; filename=bookings_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.json"
+        response.headers["Content-type"] = "application/json; charset=utf-8"
+        
+        return response
+        
+    except Exception as e:
+        return f'Ошибка экспорта: {str(e)}', 500
 
 @app.route('/admin/edit/<int:booking_id>', methods=['GET', 'POST'])
 @admin_required
@@ -740,14 +782,151 @@ def update_status(booking_id):
     
     return redirect('/admin')
 
+@app.route('/admin/bulk_actions', methods=['POST'])
+@admin_required
+def bulk_actions():
+    """Массовые действия с записями"""
+    action = request.form.get('action')
+    selected_ids = request.form.getlist('selected_ids')
+    
+    if not selected_ids:
+        return redirect('/admin')
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        if action == 'delete':
+            placeholders = ','.join(['%s'] * len(selected_ids))
+            cursor.execute(f'DELETE FROM bookings WHERE id IN ({placeholders})', selected_ids)
+        elif action == 'confirm':
+            placeholders = ','.join(['%s'] * len(selected_ids))
+            cursor.execute(f'UPDATE bookings SET status = %s WHERE id IN ({placeholders})', 
+                          ['confirmed'] + selected_ids)
+        elif action == 'cancel':
+            placeholders = ','.join(['%s'] * len(selected_ids))
+            cursor.execute(f'UPDATE bookings SET status = %s WHERE id IN ({placeholders})', 
+                          ['cancelled'] + selected_ids)
+        
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+    except Exception as e:
+        print(f"Ошибка массовых действий: {e}")
+    
+    return redirect('/admin')
+
+@app.route('/admin/clear_all', methods=['GET', 'POST'])
+@admin_required
+def clear_all():
+    """Очистка всех записей (с подтверждением)"""
+    if request.method == 'GET':
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Очистка базы данных</title>
+            <style>
+                body { font-family: Arial; padding: 40px; text-align: center; background: #f5f5f5; }
+                .warning-box { max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+                .danger-zone { background: #fff3cd; border: 2px solid #ffeaa7; padding: 20px; border-radius: 10px; margin: 20px 0; }
+                .btn-danger { background: #e74c3c; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em; margin: 10px; }
+                .btn-secondary { background: #95a5a6; color: white; padding: 15px 30px; border: none; border-radius: 5px; text-decoration: none; display: inline-block; }
+            </style>
+        </head>
+        <body>
+            <div class="warning-box">
+                <h1 style="color: #e74c3c;">⚠️ Очистка всей базы данных</h1>
+                
+                <div class="danger-zone">
+                    <h2>ВНИМАНИЕ! ОПАСНАЯ ОПЕРАЦИЯ!</h2>
+                    <p><strong>Будут удалены ВСЕ записи из базы данных.</strong></p>
+                    <p>Это действие <strong>НЕЛЬЗЯ отменить!</strong></p>
+                    <p>Все данные будут утеряны без возможности восстановления.</p>
+                </div>
+                
+                <form method="POST">
+                    <p>Для подтверждения введите "УДАЛИТЬ ВСЕ" в поле ниже:</p>
+                    <input type="text" name="confirmation" placeholder="УДАЛИТЬ ВСЕ" 
+                           style="padding: 12px; font-size: 1.2em; margin: 20px 0; width: 80%; border: 2px solid #e74c3c;">
+                    <br><br>
+                    <button type="submit" class="btn-danger">
+                        <strong>УДАЛИТЬ ВСЕ ЗАПИСИ</strong>
+                    </button>
+                    <br><br>
+                    <a href="/admin" class="btn-secondary">Отмена - вернуться в админ-панель</a>
+                </form>
+            </div>
+        </body>
+        </html>
+        '''
+    
+    if request.method == 'POST':
+        confirmation = request.form.get('confirmation')
+        if confirmation == 'УДАЛИТЬ ВСЕ':
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM bookings')
+                conn.commit()
+                
+                # Получаем количество удаленных записей
+                cursor.execute('SELECT COUNT(*) FROM bookings')
+                remaining = cursor.fetchone()[0]
+                
+                cursor.close()
+                conn.close()
+                
+                return f'''
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family: Arial; padding: 40px; text-align: center;">
+                    <h1 style="color: #2ecc71;">✅ База данных очищена</h1>
+                    <p>Все записи были удалены. Осталось записей: {remaining}</p>
+                    <div style="margin-top: 30px;">
+                        <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
+                            Вернуться в админ-панель
+                        </a>
+                        <a href="/" style="display: inline-block; padding: 12px 24px; background: #2ecc71; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
+                            Перейти к календарю
+                        </a>
+                    </div>
+                </body>
+                </html>
+                '''
+            except Exception as e:
+                return f'''
+                <!DOCTYPE html>
+                <html>
+                <body style="font-family: Arial; padding: 40px; text-align: center;">
+                    <h1 style="color: #e74c3c;">❌ Ошибка очистки базы</h1>
+                    <p>{str(e)}</p>
+                    <a href="/admin">Вернуться в админ-панель</a>
+                </body>
+                </html>
+                '''
+        else:
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ Неверное подтверждение</h1>
+                <p>Вы должны ввести "УДАЛИТЬ ВСЕ" для подтверждения</p>
+                <a href="/admin/clear_all">Попробовать снова</a>
+            </body>
+            </html>
+            '''
+
 @app.route('/health')
 def health():
     """Проверка работоспособности"""
     try:
-        # Проверяем подключение к БД
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT 1')
+        cursor.execute('SELECT COUNT(*) FROM bookings')
+        count = cursor.fetchone()[0]
         cursor.close()
         conn.close()
         
@@ -756,6 +935,7 @@ def health():
             'timestamp': datetime.now().isoformat(),
             'python_version': '3.13.4',
             'database': 'connected',
+            'total_bookings': count,
             'service': 'tax-excursion'
         }
     except Exception as e:
@@ -768,7 +948,6 @@ def health():
         }, 500
 
 if __name__ == '__main__':
-    # Инициализируем БД при запуске
     init_database()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

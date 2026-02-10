@@ -12,6 +12,9 @@ import requests
 import time
 from functools import wraps
 
+# Импортируем функции из отдельных файлов
+from database_fix import fix_database_operation
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-12345')
 app.config['ADMIN_PASSWORD'] = os.environ.get('ADMIN_PASSWORD', 'YFNS_BOT_Password123')
@@ -26,13 +29,10 @@ RUSSIAN_WEEKDAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'
 RUSSIAN_WEEKDAYS_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
 
 # Дни недели, которые должны быть закрыты (понедельник=0, пятница=4)
-CLOSED_WEEKDAYS = [0, 4]  # Понедельник и пятница
+CLOSED_WEEKDAYS = [0, 4]
 
 # Флаг для отслеживания инициализации БД
 db_initialized = False
-
-# Словарь для хранения заблокированных дат (в реальном приложении нужно хранить в БД)
-blocked_dates = set()
 
 def start_keep_alive():
     """Запускает keep-alive в фоновом потоке"""
@@ -46,7 +46,7 @@ def start_keep_alive():
             except Exception as e:
                 print(f"[{datetime.now()}] Keep-alive failed: {e}")
             
-            time.sleep(600)  # 10 минут
+            time.sleep(600)
 
     if os.environ.get('RENDER') == 'true':
         thread = threading.Thread(target=ping_self, daemon=True)
@@ -69,7 +69,6 @@ def get_db_connection():
             sslmode='require'
         )
     else:
-        # Для локальной разработки
         conn = psycopg.connect(
             dbname='tax_excursion',
             user='postgres',
@@ -111,47 +110,6 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        
-        # УДАЛЯЕМ уникальное ограничение если оно существует
-        try:
-            cursor.execute("""
-                SELECT constraint_name 
-                FROM information_schema.table_constraints 
-                WHERE table_name = 'bookings' 
-                AND constraint_type = 'UNIQUE'
-                AND constraint_name LIKE '%excursion_date%'
-            """)
-            
-            unique_constraints = cursor.fetchall()
-            for constraint in unique_constraints:
-                constraint_name = constraint[0]
-                print(f"⚠️ Удаляем уникальное ограничение: {constraint_name}")
-                cursor.execute(f'ALTER TABLE bookings DROP CONSTRAINT IF EXISTS {constraint_name}')
-                
-        except Exception as e:
-            print(f"⚠️ Ошибка проверки ограничений: {e}")
-        
-        # Проверяем и добавляем отсутствующие колонки
-        try:
-            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_name = 'bookings'")
-            existing_columns = [row[0] for row in cursor.fetchall()]
-            
-            if 'status' not in existing_columns:
-                print("⚠️ Добавляем колонку 'status'...")
-                cursor.execute('''
-                    ALTER TABLE bookings 
-                    ADD COLUMN status VARCHAR(20) DEFAULT 'pending'
-                ''')
-            
-            if 'additional_info' not in existing_columns:
-                print("⚠️ Добавляем колонку 'additional_info'...")
-                cursor.execute('''
-                    ALTER TABLE bookings 
-                    ADD COLUMN additional_info TEXT
-                ''')
-            
-        except Exception as e:
-            print(f"⚠️ Ошибка проверки колонок: {e}")
         
         conn.commit()
         cursor.close()
@@ -239,28 +197,12 @@ def get_bookings_count_by_date():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Проверяем существование колонки status
-        cursor.execute("""
-            SELECT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'bookings' AND column_name = 'status'
-            )
-        """)
-        has_status_column = cursor.fetchone()[0]
-        
-        if has_status_column:
-            cursor.execute('''
-                SELECT excursion_date::text, COUNT(*) as count 
-                FROM bookings 
-                WHERE (status != 'cancelled' OR status IS NULL)
-                GROUP BY excursion_date
-            ''')
-        else:
-            cursor.execute('''
-                SELECT excursion_date::text, COUNT(*) as count 
-                FROM bookings 
-                GROUP BY excursion_date
-            ''')
+        cursor.execute('''
+            SELECT excursion_date::text, COUNT(*) as count 
+            FROM bookings 
+            WHERE (status != 'cancelled' OR status IS NULL)
+            GROUP BY excursion_date
+        ''')
         
         booked_dates = {}
         for row in cursor.fetchall():
@@ -385,29 +327,12 @@ def index():
         return f'''
         <!DOCTYPE html>
         <html>
-        <head>
-            <title>Запись на экскурсию</title>
-            <style>
-                body {{ font-family: Arial; padding: 40px; text-align: center; }}
-                .container {{ max-width: 600px; margin: 0 auto; }}
-                .success {{ color: #2ecc71; font-size: 1.2em; }}
-                .error {{ color: #e74c3c; background: #ffe6e6; padding: 15px; border-radius: 5px; }}
-                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>Запись на экскурсию в УФНС</h1>
-                <p class="success">✅ Сайт работает на Python 3.13.4</p>
-                
-                <div class="error">
-                    <h3>⚠️ Временно недоступно</h3>
-                    <p>Проводятся технические работы. Попробуйте через несколько минут.</p>
-                    <p><small>Ошибка: {str(e)}</small></p>
-                </div>
-                
-                <a href="/" class="btn">Обновить страницу</a>
-            </div>
+        <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h1 style="color: #e74c3c;">❌ Ошибка загрузки календаря</h1>
+            <pre>{str(e)}</pre>
+            <a href="/" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
+                Обновить страницу
+            </a>
         </body>
         </html>
         ''', 500
@@ -535,7 +460,7 @@ def submit_booking():
         participants_count = request.form.get('participants_count')
         additional_info = request.form.get('additional_info', '')
         
-        # Валидация (убрали contact_person)
+        # Валидация
         if not all([excursion_date, username, school_name, class_number, 
                    contact_phone, participants_count]):
             return '''
@@ -568,7 +493,7 @@ def submit_booking():
             </html>
             '''
         
-        # Сохраняем в БД (без contact_person)
+        # Сохраняем в БД
         conn = get_db_connection()
         cursor = conn.cursor()
         
@@ -816,174 +741,144 @@ def admin_unblock_date():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
-@app.route('/admin/fix_database')
+@app.route('/admin/fix_database', methods=['GET', 'POST'])
 @admin_required
 def fix_database():
-    """Исправление структуры базы данных"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        results = []
-        
-        # Удаляем уникальное ограничение на excursion_date если оно существует
-        cursor.execute("""
-            SELECT constraint_name 
-            FROM information_schema.table_constraints 
-            WHERE table_name = 'bookings' 
-            AND constraint_type = 'UNIQUE'
-            AND constraint_name LIKE '%excursion_date%'
-        """)
-        
-        unique_constraints = cursor.fetchall()
-        
-        if unique_constraints:
-            for constraint in unique_constraints:
-                constraint_name = constraint[0]
-                try:
-                    cursor.execute(f'ALTER TABLE bookings DROP CONSTRAINT IF EXISTS {constraint_name}')
-                    results.append(f"✅ Удалено уникальное ограничение: {constraint_name}")
-                except Exception as e:
-                    results.append(f"❌ Ошибка удаления {constraint_name}: {e}")
-        else:
-            results.append("✅ Уникального ограничения на excursion_date нет")
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
-        
-        html_result = "<br>".join(results)
-        return f'''
+    """Исправление структуры базы данных - используем внешний модуль"""
+    if request.method == 'GET':
+        return '''
         <!DOCTYPE html>
         <html>
         <head>
             <title>Исправление базы данных</title>
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ font-family: Arial; padding: 20px; background: #f5f5f5; }}
-                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
-                .success {{ color: #2ecc71; }}
-                .error {{ color: #e74c3c; }}
-                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; font-size: 14px; }}
-                @media (max-width: 768px) {{
-                    .btn {{ width: 100%; margin: 5px 0; text-align: center; }}
-                }}
+                body { font-family: Arial; padding: 20px; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+                .container { max-width: 800px; width: 100%; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+                .warning-box { background: #fff3cd; border: 2px solid #ffeaa7; padding: 20px; border-radius: 10px; margin: 20px 0; }
+                .btn { display: inline-block; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; margin: 10px 0; text-decoration: none; text-align: center; }
+                .btn-danger { background: #e74c3c; color: white; }
+                .btn-primary { background: #3498db; color: white; }
+                .btn-secondary { background: #95a5a6; color: white; }
+                input { width: 100%; padding: 12px; margin: 15px 0; border: 2px solid #3498db; border-radius: 5px; font-size: 16px; }
+                @media (max-width: 768px) {
+                    .container { padding: 20px; }
+                    .btn { padding: 12px 24px; }
+                }
             </style>
         </head>
         <body>
             <div class="container">
-                <h1>🔧 Исправление базы данных</h1>
-                <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px;">
-                    {html_result}
+                <h1>🔧 Полное исправление базы данных</h1>
+                
+                <div class="warning-box">
+                    <h2 style="color: #f39c12;">⚠️ Внимание!</h2>
+                    <p><strong>Эта операция изменит структуру базы данных:</strong></p>
+                    <ul>
+                        <li>Удалит колонку <code>contact_person</code> (если существует)</li>
+                        <li>Добавит колонку <code>status</code> (если отсутствует)</li>
+                        <li>Добавит колонку <code>additional_info</code> (если отсутствует)</li>
+                        <li>Создаст таблицу <code>blocked_dates</code> для управления датами</li>
+                        <li>Удалит уникальные ограничения на <code>excursion_date</code></li>
+                        <li>Обновит существующие записи</li>
+                    </ul>
+                    <p>Операция <strong>безопасна</strong> для существующих данных.</p>
                 </div>
                 
-                <div style="margin-top: 20px;">
-                    <a href="/admin" class="btn">Вернуться в админ-панель</a>
-                    <a href="/" class="btn">Перейти к календарю</a>
-                </div>
+                <form method="POST">
+                    <p>Для подтверждения введите "ИСПРАВИТЬ БАЗУ" ниже:</p>
+                    <input type="text" name="confirmation" placeholder="ИСПРАВИТЬ БАЗУ" required>
+                    
+                    <button type="submit" class="btn btn-danger">
+                        <strong>🚀 ЗАПУСТИТЬ ИСПРАВЛЕНИЕ БАЗЫ</strong>
+                    </button>
+                    
+                    <a href="/admin" class="btn btn-secondary">Отмена - вернуться в админ-панель</a>
+                </form>
             </div>
         </body>
         </html>
         '''
+    
+    if request.method == 'POST':
+        confirmation = request.form.get('confirmation')
+        if confirmation != 'ИСПРАВИТЬ БАЗУ':
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ Неверное подтверждение</h1>
+                <p>Вы должны ввести "ИСПРАВИТЬ БАЗУ" для подтверждения</p>
+                <a href="/admin/fix_database">Попробовать снова</a>
+            </body>
+            </html>
+            '''
         
-    except Exception as e:
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial; padding: 40px; text-align: center;">
-            <h1 style="color: #e74c3c;">❌ Ошибка исправления базы</h1>
-            <pre>{str(e)}</pre>
-            <a href="/admin">Вернуться в админ-панель</a>
-        </body>
-        </html>
-        ''', 500
-
-@app.route('/admin/migrate')
-@admin_required
-def migrate_database_route():
-    """Принудительная миграция БД через веб-интерфейс"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        # Используем внешнюю функцию для миграции
+        success, results = fix_database_operation()
         
-        result = []
+        html_result = "<br>".join(results)
         
-        # Добавляем колонку status если её нет
-        try:
-            cursor.execute('''
-                ALTER TABLE bookings 
-                ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending'
-            ''')
-            result.append("✅ Колонка 'status' добавлена или уже существует")
-        except Exception as e:
-            result.append(f"❌ Ошибка добавления 'status': {e}")
-        
-        # Добавляем колонку additional_info если её нет
-        try:
-            cursor.execute('''
-                ALTER TABLE bookings 
-                ADD COLUMN IF NOT EXISTS additional_info TEXT
-            ''')
-            result.append("✅ Колонка 'additional_info' добавлена или уже существует")
-        except Exception as e:
-            result.append(f"❌ Ошибка добавления 'additional_info': {e}")
-        
-        # Обновляем существующие записи
-        try:
-            cursor.execute("UPDATE bookings SET status = 'pending' WHERE status IS NULL")
-            updated = cursor.rowcount
-            result.append(f"✅ Обновлено {updated} записей (установлен status='pending')")
-        except Exception as e:
-            result.append(f"⚠️ Не удалось обновить записи: {e}")
-        
-        conn.commit()
-        
-        # Проверяем структуру
-        cursor.execute("SELECT COUNT(*) FROM bookings")
-        total = cursor.fetchone()[0]
-        result.append(f"📊 Всего записей в базе: {total}")
-        
-        cursor.close()
-        conn.close()
-        
-        html_result = "<br>".join(result)
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Миграция базы данных</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body {{ font-family: Arial; padding: 20px; background: #f5f5f5; }}
-                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
-                .success {{ color: #2ecc71; }}
-                .error {{ color: #e74c3c; }}
-                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; font-size: 14px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🔧 Миграция базы данных</h1>
-                <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 5px;">
+        if success:
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Исправление базы данных - завершено</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body {{ font-family: Arial; padding: 20px; background: #f5f5f5; }}
+                    .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+                    .success-box {{ background: #d4edda; border: 2px solid #c3e6cb; padding: 20px; border-radius: 10px; margin: 20px 0; }}
+                    .results {{ margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 5px; max-height: 500px; overflow-y: auto; font-family: monospace; font-size: 14px; line-height: 1.4; }}
+                    .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; font-size: 14px; }}
+                    @media (max-width: 768px) {{
+                        .container {{ padding: 20px; }}
+                        .btn {{ width: 100%; margin: 5px 0; text-align: center; }}
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 style="color: #2ecc71;">🎉 Исправление базы данных завершено!</h1>
+                    
+                    <div class="success-box">
+                        <h2>✅ Успешно выполнено!</h2>
+                        <p>Все операции миграции успешно выполнены. База данных готова к работе.</p>
+                    </div>
+                    
+                    <div class="results">
+                        {html_result}
+                    </div>
+                    
+                    <div style="margin-top: 30px;">
+                        <a href="/admin" class="btn">Вернуться в админ-панель</a>
+                        <a href="/" class="btn" style="background: #2ecc71;">Перейти к календарю</a>
+                    </div>
+                </div>
+            </body>
+            </html>
+            '''
+        else:
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ Ошибка исправления базы</h1>
+                <div style="background: #ffe6e6; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: left;">
                     {html_result}
                 </div>
-                <a href="/admin" class="btn">Вернуться в админ-панель</a>
-            </div>
-        </body>
-        </html>
-        '''
-        
-    except Exception as e:
-        return f'''
-        <!DOCTYPE html>
-        <html>
-        <body style="font-family: Arial; padding: 40px; text-align: center;">
-            <h1 style="color: #e74c3c;">❌ Ошибка миграции</h1>
-            <p>{str(e)}</p>
-            <a href="/admin">Вернуться в админ-панель</a>
-        </body>
-        </html>
-        ''', 500
+                <div style="margin-top: 30px;">
+                    <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
+                        Вернуться в админ-панель
+                    </a>
+                    <a href="/admin/fix_database" style="display: inline-block; padding: 12px 24px; background: #e74c3c; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
+                        Попробовать снова
+                    </a>
+                </div>
+            </body>
+            </html>
+            ''', 500
 
 @app.route('/admin/export/csv')
 @admin_required

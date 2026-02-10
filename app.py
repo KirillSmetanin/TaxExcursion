@@ -1303,7 +1303,7 @@ def health():
             'status': 'unhealthy',
             'timestamp': datetime.now().isoformat(),
             'python_version': '3.13.4',
-            'database': 'disconnected',
+            'dАatabase': 'disconnected',
             'error': str(e)
         }, 500
 

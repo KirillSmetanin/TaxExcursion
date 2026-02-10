@@ -25,6 +25,8 @@
         .btn-danger:hover { background: #c0392b; }
         .btn-warning { background: #f39c12; }
         .btn-warning:hover { background: #e67e22; }
+        .btn-success { background: #2ecc71; }
+        .btn-success:hover { background: #27ae60; }
         
         /* Фильтры */
         .filters { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 30px; }
@@ -48,14 +50,15 @@
         /* Массовые действия */
         .bulk-actions { background: #e8f4fc; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
         .bulk-actions.active { display: block; }
-        .bulk-buttons { display: flex; gap: 10px; margin-top: 10px; }
+        .bulk-buttons { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
         .bulk-btn { padding: 8px 16px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
         .bulk-delete { background: #e74c3c; color: white; }
         .bulk-confirm { background: #2ecc71; color: white; }
         .bulk-cancel { background: #f39c12; color: white; }
         
         /* Таблица */
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .table-responsive { overflow-x: auto; margin-top: 20px; border-radius: 10px; border: 1px solid #eee; }
+        table { width: 100%; border-collapse: collapse; min-width: 800px; }
         th { background: #2c3e50; color: white; padding: 15px; text-align: left; position: sticky; top: 0; }
         td { padding: 12px 15px; border-bottom: 1px solid #eee; }
         tr:hover { background: #f8f9fa; }
@@ -69,13 +72,15 @@
         
         /* Кнопки действий */
         .action-buttons { display: flex; gap: 5px; flex-wrap: wrap; }
-        .btn-action { padding: 5px 10px; border-radius: 5px; text-decoration: none; font-size: 0.8em; color: white; }
+        .btn-action { padding: 5px 10px; border-radius: 5px; text-decoration: none; font-size: 0.8em; color: white; border: none; cursor: pointer; }
         .btn-edit { background: #3498db; }
         .btn-edit:hover { background: #2980b9; }
         .btn-delete { background: #e74c3c; }
         .btn-delete:hover { background: #c0392b; }
         .btn-status { background: #2ecc71; }
         .btn-status:hover { background: #27ae60; }
+        .btn-cancel { background: #f39c12; }
+        .btn-cancel:hover { background: #e67e22; }
         
         /* Статистика по месяцам */
         .monthly-stats { margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px; }
@@ -85,14 +90,242 @@
         .empty-state { text-align: center; padding: 50px; color: #666; }
         .empty-state i { font-size: 3em; margin-bottom: 20px; opacity: 0.3; }
         
+        /* Управление календарем */
+        .calendar-management { background: #e8f6ff; padding: 20px; border-radius: 10px; margin-bottom: 30px; border-left: 4px solid #3498db; }
+        .date-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }
+        .date-control-group { display: flex; flex-direction: column; }
+        .date-control-group input { padding: 10px; border: 2px solid #ddd; border-radius: 5px; }
+        .btn-date-control { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white; margin-top: 5px; }
+        .btn-block { background: #e74c3c; }
+        .btn-block:hover { background: #c0392b; }
+        .btn-unblock { background: #2ecc71; }
+        .btn-unblock:hover { background: #27ae60; }
+        
         /* Адаптивность */
         @media (max-width: 768px) {
-            .stats-grid { grid-template-columns: 1fr; }
-            .filter-grid { grid-template-columns: 1fr; }
-            table { font-size: 0.9em; }
-            th, td { padding: 8px; }
-            .control-buttons { flex-direction: column; }
-            .btn-control { justify-content: center; }
+            body { padding: 10px; }
+            
+            .container {
+                border-radius: 10px;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+            
+            .header {
+                padding: 20px 15px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+            
+            .stats-grid { 
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+            }
+            
+            .stat-card {
+                padding: 15px;
+            }
+            
+            .stat-value {
+                font-size: 1.5em;
+            }
+            
+            .filter-grid { 
+                grid-template-columns: 1fr;
+            }
+            
+            .control-panel {
+                padding: 15px;
+            }
+            
+            .control-buttons {
+                gap: 8px;
+            }
+            
+            .btn-control {
+                padding: 10px 15px;
+                font-size: 0.9em;
+                flex: 1 1 calc(50% - 10px);
+                min-width: 0;
+                justify-content: center;
+                text-align: center;
+            }
+            
+            .bulk-buttons {
+                flex-direction: column;
+            }
+            
+            .bulk-btn {
+                width: 100%;
+                padding: 10px;
+            }
+            
+            th, td {
+                padding: 8px 10px;
+                font-size: 0.9em;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+                gap: 3px;
+            }
+            
+            .btn-action {
+                width: 100%;
+                text-align: center;
+                padding: 6px;
+            }
+            
+            .date-controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .btn-date-control {
+                padding: 12px;
+                width: 100%;
+            }
+            
+            .monthly-stats {
+                padding: 15px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .btn-control {
+                flex: 1 1 100%;
+            }
+            
+            .header-subtitle {
+                flex-direction: column;
+                gap: 10px;
+                align-items: flex-start;
+            }
+            
+            .btn-filter {
+                width: 100%;
+                padding: 12px;
+            }
+            
+            .control-buttons {
+                gap: 5px;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
+        }
+        
+        /* Для очень маленьких экранов */
+        @media (max-width: 360px) {
+            .stat-card {
+                padding: 12px;
+            }
+            
+            .stat-value {
+                font-size: 1.3em;
+            }
+            
+            .btn-control {
+                padding: 8px 12px;
+                font-size: 0.8em;
+            }
+            
+            .filters {
+                padding: 15px;
+            }
+        }
+        
+        /* Стили для мобильного представления таблицы */
+        .mobile-table-view {
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .mobile-booking-card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+        
+        .mobile-booking-card.pending {
+            border-left-color: #f1c40f;
+        }
+        
+        .mobile-booking-card.confirmed {
+            border-left-color: #2ecc71;
+        }
+        
+        .mobile-booking-card.cancelled {
+            border-left-color: #e74c3c;
+        }
+        
+        .mobile-booking-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .mobile-booking-id {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 1.1em;
+        }
+        
+        .mobile-booking-date {
+            font-size: 0.9em;
+            color: #666;
+        }
+        
+        .mobile-booking-info {
+            margin: 10px 0;
+            font-size: 0.9em;
+        }
+        
+        .mobile-booking-info div {
+            margin-bottom: 5px;
+        }
+        
+        .mobile-booking-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        
+        @media (max-width: 768px) {
+            .table-responsive {
+                display: none;
+            }
+            
+            .mobile-table-view {
+                display: flex;
+            }
+        }
+        
+        /* Индикатор загрузки */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+        
+        .loading.active {
+            display: block;
         }
     </style>
 </head>
@@ -128,12 +361,39 @@
                     <a href="/" class="btn-control">
                         <i class="fas fa-calendar"></i> Перейти к календарю
                     </a>
+                    <a href="/admin/manage_calendar" class="btn-control btn-success">
+                        <i class="fas fa-calendar-alt"></i> Управление датами
+                    </a>
                     <a href="/admin/clear_all" class="btn-control btn-danger" onclick="return confirm('⚠️ Вы уверены что хотите очистить ВСЮ базу?')">
                         <i class="fas fa-trash"></i> Очистить базу
                     </a>
                     <a href="/admin/fix_database" class="btn-control btn-warning">
                         <i class="fas fa-database"></i> Исправить БД
                     </a>
+                </div>
+            </div>
+            
+            <!-- Управление календарем -->
+            <div class="calendar-management">
+                <h2><i class="fas fa-calendar-check"></i> Управление датами</h2>
+                <div class="date-controls">
+                    <div class="date-control-group">
+                        <label>Дата для блокировки:</label>
+                        <input type="date" id="blockDateInput" min="{{ today }}">
+                        <button class="btn-date-control btn-block" onclick="blockDate()">
+                            <i class="fas fa-ban"></i> Заблокировать дату
+                        </button>
+                    </div>
+                    <div class="date-control-group">
+                        <label>Дата для разблокировки:</label>
+                        <input type="date" id="unblockDateInput" min="{{ today }}">
+                        <button class="btn-date-control btn-unblock" onclick="unblockDate()">
+                            <i class="fas fa-check"></i> Разблокировать дату
+                        </button>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                    <i class="fas fa-info-circle"></i> Заблокированные даты будут недоступны для записи
                 </div>
             </div>
             
@@ -183,7 +443,7 @@
                         <input type="text" name="search" value="{{ search }}" placeholder="Школа, имя, телефон...">
                     </div>
                     <div class="filter-group" style="grid-column: span 2;">
-                        <div style="display: flex; gap: 10px;">
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                             <button type="submit" class="btn-filter">
                                 <i class="fas fa-search"></i> Применить фильтры
                             </button>
@@ -217,101 +477,179 @@
                 </form>
             </div>
             
-            <!-- Таблица записей -->
+            <!-- Таблица записей (десктоп) -->
             <h2><i class="fas fa-list"></i> Список записей</h2>
+            
+            <div class="loading" id="loadingIndicator">
+                <i class="fas fa-spinner fa-spin"></i> Загрузка...
+            </div>
+            
             {% if bookings %}
+            <!-- Десктопная версия -->
             <form id="tableForm">
-                <table>
-                    <thead>
-                        <tr>
-                            <th class="select-cell">
-                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
-                            </th>
-                            <th>ID</th>
-                            <th>Дата экскурсии</th>
-                            <th>Школа</th>
-                            <th>Класс</th>
-                            <th>Контактное лицо</th>
-                            <th>Статус</th>
-                            <th>Действия</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for booking in bookings %}
-                        <tr>
-                            <td class="select-cell">
-                                <input type="checkbox" name="selected_ids" value="{{ booking['id'] }}" 
-                                       class="row-selector" onchange="updateBulkActions()">
-                            </td>
-                            <td>{{ booking['id'] }}</td>
-                            <td>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="select-cell">
+                                    <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                                </th>
+                                <th>ID</th>
+                                <th>Дата экскурсии</th>
+                                <th>Школа</th>
+                                <th>Класс</th>
+                                <th>Контактное лицо</th>
+                                <th>Статус</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for booking in bookings %}
+                            <tr>
+                                <td class="select-cell">
+                                    <input type="checkbox" name="selected_ids" value="{{ booking['id'] }}" 
+                                           class="row-selector" onchange="updateBulkActions()">
+                                </td>
+                                <td>{{ booking['id'] }}</td>
+                                <td>
+                                    <strong>{{ booking['excursion_date'] }}</strong>
+                                    <br>
+                                    <small style="color: #666;">записано: {{ booking['booking_date'].strftime('%d.%m.%Y %H:%M') }}</small>
+                                </td>
+                                <td>
+                                    {{ booking['school_name'] }}
+                                    {% if booking['class_profile'] %}
+                                    <br><small>Профиль: {{ booking['class_profile'] }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ booking['class_number'] }}</td>
+                                <td>
+                                    <strong>{{ booking['contact_person'] }}</strong>
+                                    <br>
+                                    <small>{{ booking['contact_phone'] }}</small>
+                                    <br>
+                                    <small>Ответственный: {{ booking['username'] }}</small>
+                                    <br>
+                                    <small>Участников: {{ booking['participants_count'] }}</small>
+                                    {% if booking['additional_info'] %}
+                                    <br>
+                                    <small style="color: #666;">{{ booking['additional_info'][:50] }}{% if booking['additional_info']|length > 50 %}...{% endif %}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if booking['status'] == 'pending' %}
+                                        <span class="badge badge-pending">Ожидание</span>
+                                    {% elif booking['status'] == 'confirmed' %}
+                                        <span class="badge badge-confirmed">Подтверждено</span>
+                                    {% elif booking['status'] == 'cancelled' %}
+                                        <span class="badge badge-cancelled">Отменено</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <a href="/admin/edit/{{ booking['id'] }}" class="btn-action btn-edit">
+                                            <i class="fas fa-edit"></i> Редакт.
+                                        </a>
+                                        {% if booking['status'] != 'confirmed' %}
+                                        <form action="/admin/update_status/{{ booking['id'] }}" method="POST" style="display: inline;">
+                                            <input type="hidden" name="status" value="confirmed">
+                                            <button type="submit" class="btn-action btn-status">
+                                                <i class="fas fa-check"></i> Подтв.
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        {% if booking['status'] != 'cancelled' %}
+                                        <form action="/admin/update_status/{{ booking['id'] }}" method="POST" style="display: inline;">
+                                            <input type="hidden" name="status" value="cancelled">
+                                            <button type="submit" class="btn-action btn-cancel">
+                                                <i class="fas fa-times"></i> Отменить
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                        <form action="/admin/delete/{{ booking['id'] }}" method="POST" style="display: inline;" 
+                                              onsubmit="return confirm('Удалить запись #{{ booking['id'] }}?')">
+                                            <button type="submit" class="btn-action btn-delete">
+                                                <i class="fas fa-trash"></i> Удалить
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+            
+            <!-- Мобильная версия -->
+            <div class="mobile-table-view" id="mobileBookings">
+                {% for booking in bookings %}
+                <div class="mobile-booking-card {{ booking['status'] }}">
+                    <div class="mobile-booking-header">
+                        <div>
+                            <div class="mobile-booking-id">#{{ booking['id'] }}</div>
+                            <div class="mobile-booking-date">
                                 <strong>{{ booking['excursion_date'] }}</strong>
                                 <br>
-                                <small style="color: #666;">записано: {{ booking['booking_date'].strftime('%d.%m.%Y %H:%M') }}</small>
-                            </td>
-                            <td>
-                                {{ booking['school_name'] }}
-                                {% if booking['class_profile'] %}
-                                <br><small>Профиль: {{ booking['class_profile'] }}</small>
-                                {% endif %}
-                            </td>
-                            <td>{{ booking['class_number'] }}</td>
-                            <td>
-                                <strong>{{ booking['contact_person'] }}</strong>
-                                <br>
-                                <small>{{ booking['contact_phone'] }}</small>
-                                <br>
-                                <small>Ответственный: {{ booking['username'] }}</small>
-                                <br>
-                                <small>Участников: {{ booking['participants_count'] }}</small>
-                                {% if booking['additional_info'] %}
-                                <br>
-                                <small style="color: #666;">{{ booking['additional_info'][:50] }}{% if booking['additional_info']|length > 50 %}...{% endif %}</small>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if booking['status'] == 'pending' %}
-                                    <span class="badge badge-pending">Ожидание</span>
-                                {% elif booking['status'] == 'confirmed' %}
-                                    <span class="badge badge-confirmed">Подтверждено</span>
-                                {% elif booking['status'] == 'cancelled' %}
-                                    <span class="badge badge-cancelled">Отменено</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <div class="action-buttons">
-                                    <a href="/admin/edit/{{ booking['id'] }}" class="btn-action btn-edit">
-                                        <i class="fas fa-edit"></i> Редакт.
-                                    </a>
-                                    {% if booking['status'] != 'confirmed' %}
-                                    <form action="/admin/update_status/{{ booking['id'] }}" method="POST" style="display: inline;">
-                                        <input type="hidden" name="status" value="confirmed">
-                                        <button type="submit" class="btn-action btn-status" style="border: none; cursor: pointer;">
-                                            <i class="fas fa-check"></i> Подтв.
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                    {% if booking['status'] != 'cancelled' %}
-                                    <form action="/admin/update_status/{{ booking['id'] }}" method="POST" style="display: inline;">
-                                        <input type="hidden" name="status" value="cancelled">
-                                        <button type="submit" class="btn-action" style="border: none; cursor: pointer; background: #f39c12; color: white; padding: 5px 10px; border-radius: 5px; font-size: 0.8em;">
-                                            <i class="fas fa-times"></i> Отменить
-                                        </button>
-                                    </form>
-                                    {% endif %}
-                                    <form action="/admin/delete/{{ booking['id'] }}" method="POST" style="display: inline;" 
-                                          onsubmit="return confirm('Удалить запись #{{ booking['id'] }}?')">
-                                        <button type="submit" class="btn-action btn-delete" style="border: none; cursor: pointer;">
-                                            <i class="fas fa-trash"></i> Удалить
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </form>
+                                <small>записано: {{ booking['booking_date'].strftime('%d.%m.%Y %H:%M') }}</small>
+                            </div>
+                        </div>
+                        <div>
+                            {% if booking['status'] == 'pending' %}
+                                <span class="badge badge-pending">Ожидание</span>
+                            {% elif booking['status'] == 'confirmed' %}
+                                <span class="badge badge-confirmed">Подтверждено</span>
+                            {% elif booking['status'] == 'cancelled' %}
+                                <span class="badge badge-cancelled">Отменено</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="mobile-booking-info">
+                        <div><strong>Школа:</strong> {{ booking['school_name'] }}</div>
+                        <div><strong>Класс:</strong> {{ booking['class_number'] }}</div>
+                        {% if booking['class_profile'] %}
+                        <div><strong>Профиль:</strong> {{ booking['class_profile'] }}</div>
+                        {% endif %}
+                        <div><strong>Контакт:</strong> {{ booking['contact_person'] }}</div>
+                        <div><strong>Телефон:</strong> {{ booking['contact_phone'] }}</div>
+                        <div><strong>Ответственный:</strong> {{ booking['username'] }}</div>
+                        <div><strong>Участников:</strong> {{ booking['participants_count'] }}</div>
+                        {% if booking['additional_info'] %}
+                        <div><strong>Доп. инфо:</strong> {{ booking['additional_info'][:100] }}{% if booking['additional_info']|length > 100 %}...{% endif %}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mobile-booking-actions">
+                        <a href="/admin/edit/{{ booking['id'] }}" class="btn-action btn-edit" style="flex: 1;">
+                            <i class="fas fa-edit"></i> Редактировать
+                        </a>
+                        {% if booking['status'] != 'confirmed' %}
+                        <form action="/admin/update_status/{{ booking['id'] }}" method="POST" style="flex: 1;">
+                            <input type="hidden" name="status" value="confirmed">
+                            <button type="submit" class="btn-action btn-status" style="width: 100%;">
+                                <i class="fas fa-check"></i> Подтвердить
+                            </button>
+                        </form>
+                        {% endif %}
+                        {% if booking['status'] != 'cancelled' %}
+                        <form action="/admin/update_status/{{ booking['id'] }}" method="POST" style="flex: 1;">
+                            <input type="hidden" name="status" value="cancelled">
+                            <button type="submit" class="btn-action btn-cancel" style="width: 100%;">
+                                <i class="fas fa-times"></i> Отменить
+                            </button>
+                        </form>
+                        {% endif %}
+                        <form action="/admin/delete/{{ booking['id'] }}" method="POST" style="flex: 1;" 
+                              onsubmit="return confirm('Удалить запись #{{ booking['id'] }}?')">
+                            <button type="submit" class="btn-action btn-delete" style="width: 100%;">
+                                <i class="fas fa-trash"></i> Удалить
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
             {% else %}
             <div class="empty-state">
                 <i class="fas fa-calendar-times"></i>
@@ -382,12 +720,177 @@
         
         function deselectAll() {
             document.querySelectorAll('.row-selector').forEach(s => s.checked = false);
-            document.getElementById('selectAll').checked = false;
+            const selectAll = document.getElementById('selectAll');
+            if (selectAll) selectAll.checked = false;
             updateBulkActions();
         }
         
+        // Управление датами
+        function showLoading() {
+            document.getElementById('loadingIndicator').classList.add('active');
+        }
+        
+        function hideLoading() {
+            document.getElementById('loadingIndicator').classList.remove('active');
+        }
+        
+        function blockDate() {
+            const dateInput = document.getElementById('blockDateInput');
+            const date = dateInput.value;
+            
+            if (!date) {
+                alert('Выберите дату для блокировки');
+                return;
+            }
+            
+            if (!confirm(`Заблокировать дату ${date} для записей?`)) {
+                return;
+            }
+            
+            showLoading();
+            
+            fetch('/admin/block_date', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ date: date })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    alert('Дата успешно заблокирована');
+                    dateInput.value = '';
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                alert('Ошибка сети: ' + error);
+            });
+        }
+        
+        function unblockDate() {
+            const dateInput = document.getElementById('unblockDateInput');
+            const date = dateInput.value;
+            
+            if (!date) {
+                alert('Выберите дату для разблокировки');
+                return;
+            }
+            
+            if (!confirm(`Разблокировать дату ${date} для записей?`)) {
+                return;
+            }
+            
+            showLoading();
+            
+            fetch('/admin/unblock_date', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ date: date })
+            })
+            .then(response => response.json())
+            .then(data => {
+                hideLoading();
+                if (data.success) {
+                    alert('Дата успешно разблокирована');
+                    dateInput.value = '';
+                } else {
+                    alert('Ошибка: ' + data.message);
+                }
+            })
+            .catch(error => {
+                hideLoading();
+                alert('Ошибка сети: ' + error);
+            });
+        }
+        
+        // Автоматическое определение мобильного устройства
+        function isMobileDevice() {
+            return window.innerWidth <= 768 || 
+                   /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        // Улучшение UX для мобильных
+        if (isMobileDevice()) {
+            // Добавляем свайп для карточек записей
+            const mobileCards = document.querySelectorAll('.mobile-booking-card');
+            let touchStartX = 0;
+            
+            mobileCards.forEach(card => {
+                card.addEventListener('touchstart', function(e) {
+                    touchStartX = e.touches[0].clientX;
+                    this.style.transform = 'scale(0.98)';
+                }, { passive: true });
+                
+                card.addEventListener('touchend', function(e) {
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const diffX = touchStartX - touchEndX;
+                    
+                    this.style.transform = '';
+                    
+                    // Свайп вправо для быстрых действий
+                    if (Math.abs(diffX) > 50) {
+                        if (diffX < 0) {
+                            // Свайп вправо - показать кнопки действий
+                            this.style.transform = 'translateX(-100px)';
+                            setTimeout(() => {
+                                this.style.transform = '';
+                            }, 1000);
+                        }
+                    }
+                }, { passive: true });
+            });
+            
+            // Добавляем индикатор для свайпа
+            const firstCard = document.querySelector('.mobile-booking-card');
+            if (firstCard) {
+                setTimeout(() => {
+                    const swipeHint = document.createElement('div');
+                    swipeHint.style.cssText = 'text-align: center; color: #666; font-size: 0.8em; margin: 10px 0; padding: 8px; background: #f8f9fa; border-radius: 5px;';
+                    swipeHint.innerHTML = '← Свайпните вправо для быстрых действий';
+                    const mobileBookings = document.getElementById('mobileBookings');
+                    if (mobileBookings) {
+                        mobileBookings.parentNode.insertBefore(swipeHint, mobileBookings);
+                        
+                        setTimeout(() => {
+                            swipeHint.style.transition = 'opacity 0.5s';
+                            swipeHint.style.opacity = '0';
+                            setTimeout(() => swipeHint.remove(), 500);
+                        }, 3000);
+                    }
+                }, 1000);
+            }
+        }
+        
         // Инициализация
-        document.addEventListener('DOMContentLoaded', updateBulkActions);
+        document.addEventListener('DOMContentLoaded', function() {
+            updateBulkActions();
+            
+            // Устанавливаем минимальную дату для блокировки на сегодня
+            const today = new Date().toISOString().split('T')[0];
+            const blockDateInput = document.getElementById('blockDateInput');
+            const unblockDateInput = document.getElementById('unblockDateInput');
+            
+            if (blockDateInput) blockDateInput.min = today;
+            if (unblockDateInput) unblockDateInput.min = today;
+            
+            // Добавляем слушатель для обновления страницы после массовых действий
+            const bulkForm = document.getElementById('bulkForm');
+            if (bulkForm) {
+                bulkForm.addEventListener('submit', function() {
+                    showLoading();
+                    setTimeout(() => {
+                        hideLoading();
+                    }, 2000);
+                });
+            }
+        });
     </script>
 </body>
 </html>

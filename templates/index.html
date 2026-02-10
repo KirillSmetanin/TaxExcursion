@@ -679,6 +679,45 @@
             margin-right: 6px;
             font-size: 1.1em;
         }
+
+        /* Новые статусы для календаря */
+.day-closed {
+    background: rgba(149, 165, 166, 0.2);
+    border: 2px solid #95a5a6;
+    cursor: not-allowed;
+}
+
+.day-blocked {
+    background: rgba(231, 76, 60, 0.1);
+    border: 2px solid #e74c3c;
+    cursor: not-allowed;
+}
+
+.status-closed {
+    background: #95a5a6;
+    color: white;
+}
+
+.status-blocked {
+    background: #e74c3c;
+    color: white;
+}
+
+.mobile-day-closed {
+    border-left-color: #95a5a6;
+}
+
+.mobile-day-blocked {
+    border-left-color: #e74c3c;
+}
+
+.mobile-status-closed {
+    background: #95a5a6;
+}
+
+.mobile-status-blocked {
+    background: #e74c3c;
+}
     </style>
 </head>
 <body>
@@ -909,7 +948,7 @@
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: #95a5a6;"></div>
-                    <span>Выходной день (недоступно)</span>
+                    <span>Выходной/Закрытый день</span>
                 </div>
                 <div class="legend-item">
                     <div class="legend-color" style="background: #f5f5f5; border: 2px solid #eee;"></div>

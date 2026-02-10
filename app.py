@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, session, make_response
+from flask import Flask, render_template, request, redirect, url_for, send_file, session, make_response, jsonify
 import os
 from datetime import datetime, timedelta, date
 import calendar
@@ -10,6 +10,7 @@ import io
 import threading
 import requests
 import time
+from functools import wraps
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-12345')
@@ -24,8 +25,14 @@ RUSSIAN_MONTHS = [
 RUSSIAN_WEEKDAYS_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 RUSSIAN_WEEKDAYS_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
 
+# Дни недели, которые должны быть закрыты (понедельник=0, пятница=4)
+CLOSED_WEEKDAYS = [0, 4]  # Понедельник и пятница
+
 # Флаг для отслеживания инициализации БД
 db_initialized = False
+
+# Словарь для хранения заблокированных дат (в реальном приложении нужно хранить в БД)
+blocked_dates = set()
 
 def start_keep_alive():
     """Запускает keep-alive в фоновом потоке"""
@@ -39,10 +46,8 @@ def start_keep_alive():
             except Exception as e:
                 print(f"[{datetime.now()}] Keep-alive failed: {e}")
             
-            # Ждем 10 минут (600 секунд) - достаточно часто чтобы не заснуть
-            time.sleep(600)
+            time.sleep(600)  # 10 минут
 
-    # Запускаем только на Render
     if os.environ.get('RENDER') == 'true':
         thread = threading.Thread(target=ping_self, daemon=True)
         thread.start()
@@ -53,7 +58,6 @@ def get_db_connection():
     database_url = os.environ.get('DATABASE_URL')
     
     if database_url:
-        # Парсим URL для Render
         parsed_url = urllib.parse.urlparse(database_url)
         
         conn = psycopg.connect(
@@ -76,13 +80,13 @@ def get_db_connection():
     return conn
 
 def init_database():
-    """Инициализация БД"""
+    """Инициализация БД с таблицей для заблокированных дат"""
     global db_initialized
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Создаем таблицу если ее нет
+        # Создаем таблицу бронирований если ее нет
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS bookings (
                 id SERIAL PRIMARY KEY,
@@ -91,12 +95,20 @@ def init_database():
                 class_number VARCHAR(20) NOT NULL,
                 class_profile VARCHAR(100),
                 excursion_date DATE NOT NULL,
-                contact_person VARCHAR(200) NOT NULL,
                 contact_phone VARCHAR(20) NOT NULL,
                 participants_count INTEGER NOT NULL,
                 booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 additional_info TEXT,
                 status VARCHAR(20) DEFAULT 'pending'
+            )
+        ''')
+        
+        # Создаем таблицу для заблокированных дат
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS blocked_dates (
+                id SERIAL PRIMARY KEY,
+                blocked_date DATE NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -156,6 +168,69 @@ def check_and_init_db():
     if not db_initialized:
         init_database()
 
+def get_blocked_dates():
+    """Получает заблокированные даты из БД"""
+    check_and_init_db()
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT blocked_date FROM blocked_dates')
+        dates = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        return {date[0].isoformat() for date in dates}
+        
+    except Exception as e:
+        print(f"Ошибка получения заблокированных дат: {e}")
+        return set()
+
+def is_date_blocked(date_obj):
+    """Проверяет, заблокирована ли дата"""
+    blocked_dates = get_blocked_dates()
+    return date_obj.isoformat() in blocked_dates
+
+def block_date(date_str):
+    """Блокирует дату"""
+    check_and_init_db()
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('INSERT INTO blocked_dates (blocked_date) VALUES (%s) ON CONFLICT DO NOTHING', (date_str,))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        
+        return True, "Дата заблокирована"
+        
+    except Exception as e:
+        return False, str(e)
+
+def unblock_date(date_str):
+    """Разблокирует дату"""
+    check_and_init_db()
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM blocked_dates WHERE blocked_date = %s', (date_str,))
+        conn.commit()
+        
+        cursor.close()
+        conn.close()
+        
+        return True, "Дата разблокирована"
+        
+    except Exception as e:
+        return False, str(e)
+
 def get_bookings_count_by_date():
     """Количество записей по датам"""
     check_and_init_db()
@@ -174,15 +249,13 @@ def get_bookings_count_by_date():
         has_status_column = cursor.fetchone()[0]
         
         if has_status_column:
-            # Используем запрос с проверкой статуса
             cursor.execute('''
                 SELECT excursion_date::text, COUNT(*) as count 
                 FROM bookings 
-                WHERE status != 'cancelled' OR status IS NULL
+                WHERE (status != 'cancelled' OR status IS NULL)
                 GROUP BY excursion_date
             ''')
         else:
-            # Используем старый запрос без status
             cursor.execute('''
                 SELECT excursion_date::text, COUNT(*) as count 
                 FROM bookings 
@@ -202,7 +275,7 @@ def get_bookings_count_by_date():
         return {}
 
 def generate_calendar_data(year=None, month=None):
-    """Генерация календаря"""
+    """Генерация календаря с учетом закрытых дней недели и заблокированных дат"""
     today = date.today()
     
     if year is None:
@@ -214,6 +287,7 @@ def generate_calendar_data(year=None, month=None):
     first_weekday = calendar.weekday(year, month, 1)
     
     bookings = get_bookings_count_by_date()
+    blocked_dates_set = get_blocked_dates()
     
     calendar_data = {
         'year': year,
@@ -236,12 +310,19 @@ def generate_calendar_data(year=None, month=None):
         date_str = date_obj.isoformat()
         weekday = date_obj.weekday()
         is_weekend = weekday >= 5
+        is_closed_weekday = weekday in CLOSED_WEEKDAYS
         
         if date_obj < today:
             status = 'past'
             available_slots = 0
         elif is_weekend:
             status = 'weekend'
+            available_slots = 0
+        elif is_closed_weekday:
+            status = 'closed'
+            available_slots = 0
+        elif date_str in blocked_dates_set:
+            status = 'blocked'
             available_slots = 0
         else:
             bookings_count = bookings.get(date_str, 0)
@@ -262,6 +343,8 @@ def generate_calendar_data(year=None, month=None):
             'available_slots': available_slots,
             'is_today': date_obj == today,
             'is_weekend': is_weekend,
+            'is_closed_weekday': is_closed_weekday,
+            'is_blocked': date_str in blocked_dates_set,
             'weekday_name': RUSSIAN_WEEKDAYS_FULL[weekday],
         })
     
@@ -273,7 +356,16 @@ def generate_calendar_data(year=None, month=None):
     
     return calendar_data
 
-# Маршруты для пользовательской части (оставляем без изменений)
+# Декоратор для админ-доступа
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('admin_logged_in'):
+            return redirect('/admin/login')
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Маршруты для пользовательской части
 @app.route('/')
 def index():
     """Главная страница"""
@@ -315,12 +407,6 @@ def index():
                 </div>
                 
                 <a href="/" class="btn">Обновить страницу</a>
-                
-                <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
-                    <h3>Тестовые ссылки:</h3>
-                    <p><a href="/admin/login">Админ-панель</a></p>
-                    <p><a href="/health">Проверка работоспособности</a></p>
-                </div>
             </div>
         </body>
         </html>
@@ -366,12 +452,40 @@ def book_date(date_str):
             </html>
             ''', 400
         
-        if date_obj.weekday() >= 5:
+        weekday = date_obj.weekday()
+        if weekday >= 5:
             return '''
             <!DOCTYPE html>
             <html>
             <body style="font-family: Arial; padding: 40px; text-align: center;">
-                <h1 style="color: #e74c3c;">❌ Запись возможна только в будние дни (Пн-Пт)</h1>
+                <h1 style="color: #e74c3c;">❌ Запись возможна только в будние дни (Вт-Чт)</h1>
+                <a href="/" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
+                    Вернуться к календарю
+                </a>
+            </body>
+            </html>
+            ''', 400
+        
+        if weekday in CLOSED_WEEKDAYS:
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ Запись недоступна</h1>
+                <p>По понедельникам и пятницам экскурсии не проводятся.</p>
+                <a href="/" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
+                    Вернуться к календарю
+                </a>
+            </body>
+            </html>
+            ''', 400
+        
+        if is_date_blocked(date_obj):
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ На эту дату запись временно недоступна</h1>
                 <a href="/" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
                     Вернуться к календарю
                 </a>
@@ -400,7 +514,7 @@ def book_date(date_str):
         return render_template('booking.html',
                              date_str=date_str,
                              date_formatted=date_obj.strftime('%d.%m.%Y'),
-                             weekday=RUSSIAN_WEEKDAYS_FULL[date_obj.weekday()],
+                             weekday=RUSSIAN_WEEKDAYS_FULL[weekday],
                              available_slots=available_slots)
         
     except:
@@ -417,14 +531,13 @@ def submit_booking():
         school_name = request.form.get('school_name')
         class_number = request.form.get('class_number')
         class_profile = request.form.get('class_profile', '')
-        contact_person = request.form.get('contact_person')
         contact_phone = request.form.get('contact_phone')
         participants_count = request.form.get('participants_count')
         additional_info = request.form.get('additional_info', '')
         
-        # Валидация
+        # Валидация (убрали contact_person)
         if not all([excursion_date, username, school_name, class_number, 
-                   contact_person, contact_phone, participants_count]):
+                   contact_phone, participants_count]):
             return '''
             <!DOCTYPE html>
             <html>
@@ -437,7 +550,7 @@ def submit_booking():
             </html>
             ''', 400
         
-        # Проверяем доступность (максимум 2 записи в день)
+        # Проверяем доступность
         bookings = get_bookings_count_by_date()
         current_count = bookings.get(excursion_date, 0)
         
@@ -455,17 +568,17 @@ def submit_booking():
             </html>
             '''
         
-        # Сохраняем в БД
+        # Сохраняем в БД (без contact_person)
         conn = get_db_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
             INSERT INTO bookings 
             (username, school_name, class_number, class_profile, 
-             excursion_date, contact_person, contact_phone, participants_count, additional_info)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+             excursion_date, contact_phone, participants_count, additional_info)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         ''', (username, school_name, class_number, class_profile,
-              excursion_date, contact_person, contact_phone, int(participants_count), additional_info))
+              excursion_date, contact_phone, int(participants_count), additional_info))
         
         conn.commit()
         cursor.close()
@@ -475,8 +588,7 @@ def submit_booking():
         date_obj = date.fromisoformat(excursion_date)
         return render_template('success.html',
                              date_formatted=date_obj.strftime('%d.%m.%Y'),
-                             school_name=school_name,
-                             contact_person=contact_person)
+                             school_name=school_name)
         
     except Exception as e:
         return f'''
@@ -520,11 +632,16 @@ def admin_login():
     <html>
     <head>
         <title>Вход в админ-панель</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body { font-family: Arial; padding: 40px; text-align: center; background: #f5f5f5; }
-            .login-box { max-width: 400px; margin: 50px auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-            input[type="password"] { width: 100%; padding: 12px; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; }
-            button { background: #3498db; color: white; border: none; padding: 12px 30px; border-radius: 5px; cursor: pointer; }
+            body { font-family: Arial; padding: 20px; text-align: center; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+            .login-box { max-width: 400px; width: 100%; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+            input[type="password"] { width: 100%; padding: 12px; margin: 20px 0; border: 1px solid #ddd; border-radius: 5px; font-size: 16px; }
+            button { background: #3498db; color: white; border: none; padding: 12px 30px; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; }
+            @media (max-width: 480px) {
+                .login-box { padding: 20px; }
+                body { padding: 10px; }
+            }
         </style>
     </head>
     <body>
@@ -546,17 +663,6 @@ def admin_logout():
     session.pop('admin_logged_in', None)
     return redirect('/')
 
-def admin_required(f):
-    """Декоратор для проверки авторизации админа"""
-    from functools import wraps
-    
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if not session.get('admin_logged_in'):
-            return redirect('/admin/login')
-        return f(*args, **kwargs)
-    return decorated_function
-
 @app.route('/admin')
 @admin_required
 def admin():
@@ -576,7 +682,7 @@ def admin():
         # Базовый запрос
         query = '''
             SELECT id, username, school_name, class_number, class_profile,
-                   excursion_date, contact_person, contact_phone, 
+                   excursion_date, contact_phone, 
                    participants_count, booking_date, status, additional_info
             FROM bookings 
         '''
@@ -599,11 +705,10 @@ def admin():
             where_clauses.append('''
                 (school_name ILIKE %s OR 
                  username ILIKE %s OR 
-                 contact_person ILIKE %s OR 
                  contact_phone ILIKE %s)
             ''')
             search_term = f'%{search}%'
-            params.extend([search_term, search_term, search_term, search_term])
+            params.extend([search_term, search_term, search_term])
         
         if where_clauses:
             query += ' WHERE ' + ' AND '.join(where_clauses)
@@ -653,18 +758,63 @@ def admin():
                                  'confirmed': confirmed,
                                  'cancelled': cancelled,
                                  'monthly_stats': monthly_stats
-                             })
+                             },
+                             today=date.today())
     except Exception as e:
         return f'''
         <!DOCTYPE html>
         <html>
-        <body style="font-family: Arial; padding: 40px;">
+        <body style="font-family: Arial; padding: 40px; text-align: center;">
             <h1>Ошибка админ-панели</h1>
             <pre>{str(e)}</pre>
             <a href="/">На главную</a>
         </body>
         </html>
         ''', 500
+
+@app.route('/admin/block_date', methods=['POST'])
+@admin_required
+def admin_block_date():
+    """Блокировка даты через API"""
+    try:
+        data = request.get_json()
+        date_str = data.get('date')
+        
+        if not date_str:
+            return jsonify({'success': False, 'message': 'Дата не указана'}), 400
+        
+        success, message = block_date(date_str)
+        
+        return jsonify({
+            'success': success,
+            'message': message,
+            'date': date_str
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/admin/unblock_date', methods=['POST'])
+@admin_required
+def admin_unblock_date():
+    """Разблокировка даты через API"""
+    try:
+        data = request.get_json()
+        date_str = data.get('date')
+        
+        if not date_str:
+            return jsonify({'success': False, 'message': 'Дата не указана'}), 400
+        
+        success, message = unblock_date(date_str)
+        
+        return jsonify({
+            'success': success,
+            'message': message,
+            'date': date_str
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 @app.route('/admin/fix_database')
 @admin_required
@@ -676,20 +826,7 @@ def fix_database():
         
         results = []
         
-        # 1. Проверяем уникальные ограничения
-        cursor.execute("""
-            SELECT constraint_name, constraint_type
-            FROM information_schema.table_constraints 
-            WHERE table_name = 'bookings'
-        """)
-        
-        constraints = cursor.fetchall()
-        results.append(f"📋 Найдено ограничений: {len(constraints)}")
-        
-        for constraint in constraints:
-            results.append(f"  - {constraint[0]} ({constraint[1]})")
-        
-        # 2. Удаляем уникальное ограничение на excursion_date если оно существует
+        # Удаляем уникальное ограничение на excursion_date если оно существует
         cursor.execute("""
             SELECT constraint_name 
             FROM information_schema.table_constraints 
@@ -711,60 +848,26 @@ def fix_database():
         else:
             results.append("✅ Уникального ограничения на excursion_date нет")
         
-        # 3. Проверяем существующие индексы
-        cursor.execute("""
-            SELECT indexname, indexdef 
-            FROM pg_indexes 
-            WHERE tablename = 'bookings'
-        """)
-        
-        indexes = cursor.fetchall()
-        results.append(f"📋 Найдено индексов: {len(indexes)}")
-        
-        for idx in indexes:
-            results.append(f"  - {idx[0]}: {idx[1][:100]}...")
-        
         conn.commit()
-        
-        # 4. Проверяем количество записей на одну дату
-        cursor.execute("""
-            SELECT excursion_date, COUNT(*) as count
-            FROM bookings
-            GROUP BY excursion_date
-            HAVING COUNT(*) > 1
-            ORDER BY count DESC
-        """)
-        
-        duplicate_dates = cursor.fetchall()
-        
-        if duplicate_dates:
-            results.append(f"\n📊 Даты с несколькими записями: {len(duplicate_dates)}")
-            for date_str, count in duplicate_dates[:10]:  # Показываем первые 10
-                results.append(f"  - {date_str}: {count} записей")
-        else:
-            results.append("\n✅ Нет дат с несколькими записями")
-        
         cursor.close()
         conn.close()
         
-        # Отображаем результаты
         html_result = "<br>".join(results)
         return f'''
         <!DOCTYPE html>
         <html>
         <head>
             <title>Исправление базы данных</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ font-family: Arial; padding: 40px; background: #f5f5f5; }}
-                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+                body {{ font-family: Arial; padding: 20px; background: #f5f5f5; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
                 .success {{ color: #2ecc71; }}
                 .error {{ color: #e74c3c; }}
-                .info {{ color: #3498db; }}
-                .warning {{ color: #f39c12; }}
-                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; }}
-                .btn-danger {{ background: #e74c3c; }}
-                .btn-success {{ background: #2ecc71; }}
-                pre {{ background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; font-size: 14px; }}
+                @media (max-width: 768px) {{
+                    .btn {{ width: 100%; margin: 5px 0; text-align: center; }}
+                }}
             </style>
         </head>
         <body>
@@ -774,18 +877,8 @@ def fix_database():
                     {html_result}
                 </div>
                 
-                <div style="margin-top: 30px; padding: 20px; background: #fff3cd; border-radius: 5px;">
-                    <h3><i class="fas fa-exclamation-triangle"></i> Что было сделано:</h3>
-                    <ul>
-                        <li>Удалено уникальное ограничение на поле excursion_date</li>
-                        <li>Теперь можно создавать до 2 записей на одну дату</li>
-                        <li>Старые данные сохранены</li>
-                    </ul>
-                </div>
-                
-                <div style="margin-top: 30px;">
+                <div style="margin-top: 20px;">
                     <a href="/admin" class="btn">Вернуться в админ-панель</a>
-                    <a href="/admin/fix_database" class="btn btn-success">Проверить снова</a>
                     <a href="/" class="btn">Перейти к календарю</a>
                 </div>
             </div>
@@ -853,20 +946,19 @@ def migrate_database_route():
         cursor.close()
         conn.close()
         
-        # Отображаем результаты
         html_result = "<br>".join(result)
         return f'''
         <!DOCTYPE html>
         <html>
         <head>
             <title>Миграция базы данных</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body {{ font-family: Arial; padding: 40px; background: #f5f5f5; }}
-                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
+                body {{ font-family: Arial; padding: 20px; background: #f5f5f5; }}
+                .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
                 .success {{ color: #2ecc71; }}
                 .error {{ color: #e74c3c; }}
-                .info {{ color: #3498db; }}
-                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }}
+                .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; font-size: 14px; }}
             </style>
         </head>
         <body>
@@ -876,7 +968,6 @@ def migrate_database_route():
                     {html_result}
                 </div>
                 <a href="/admin" class="btn">Вернуться в админ-панель</a>
-                <a href="/admin/migrate" class="btn" style="background: #2ecc71;">Повторить проверку</a>
             </div>
         </body>
         </html>
@@ -902,7 +993,6 @@ def export_bookings_csv():
         conn = get_db_connection()
         cursor = conn.cursor(row_factory=dict_row)
         
-        # Получаем все записи
         cursor.execute('''
             SELECT * FROM bookings 
             ORDER BY excursion_date DESC, booking_date DESC
@@ -910,11 +1000,9 @@ def export_bookings_csv():
         bookings = cursor.fetchall()
         conn.close()
         
-        # Создаем CSV в памяти
         output = io.StringIO()
         writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         
-        # Заголовки
         headers = [
             'ID',
             'ФИО ответственного',
@@ -922,7 +1010,6 @@ def export_bookings_csv():
             'Класс/Курс',
             'Профиль класса',
             'Дата экскурсии',
-            'Контактное лицо в УФНС',
             'Контактный телефон',
             'Количество участников',
             'Дата и время записи',
@@ -931,7 +1018,6 @@ def export_bookings_csv():
         ]
         writer.writerow(headers)
         
-        # Данные
         status_mapping = {
             'pending': 'Ожидание',
             'confirmed': 'Подтверждено',
@@ -946,7 +1032,6 @@ def export_bookings_csv():
                 booking['class_number'],
                 booking['class_profile'],
                 booking['excursion_date'],
-                booking['contact_person'],
                 booking['contact_phone'],
                 booking['participants_count'],
                 booking['booking_date'],
@@ -957,7 +1042,6 @@ def export_bookings_csv():
         
         output.seek(0)
         
-        # Создаем response
         response = make_response(output.getvalue())
         response.headers["Content-Disposition"] = f"attachment; filename=bookings_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.csv"
         response.headers["Content-type"] = "text/csv; charset=utf-8"
@@ -976,36 +1060,6 @@ def export_bookings_csv():
         </html>
         ''', 500
 
-@app.route('/admin/export/json')
-@admin_required
-def export_bookings_json():
-    """Экспорт записей в JSON"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(row_factory=dict_row)
-        
-        cursor.execute('''
-            SELECT * FROM bookings 
-            ORDER BY excursion_date DESC, booking_date DESC
-        ''')
-        bookings = cursor.fetchall()
-        conn.close()
-        
-        # Преобразуем в JSON
-        import json
-        output = io.StringIO()
-        json.dump(bookings, output, ensure_ascii=False, indent=2, default=str)
-        output.seek(0)
-        
-        response = make_response(output.getvalue())
-        response.headers["Content-Disposition"] = f"attachment; filename=bookings_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.json"
-        response.headers["Content-type"] = "application/json; charset=utf-8"
-        
-        return response
-        
-    except Exception as e:
-        return f'Ошибка экспорта: {str(e)}', 500
-
 @app.route('/admin/edit/<int:booking_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_booking(booking_id):
@@ -1019,7 +1073,6 @@ def edit_booking(booking_id):
         class_number = request.form.get('class_number')
         class_profile = request.form.get('class_profile')
         excursion_date = request.form.get('excursion_date')
-        contact_person = request.form.get('contact_person')
         contact_phone = request.form.get('contact_phone')
         participants_count = request.form.get('participants_count')
         status = request.form.get('status')
@@ -1031,14 +1084,13 @@ def edit_booking(booking_id):
                 class_number = %s,
                 class_profile = %s,
                 excursion_date = %s,
-                contact_person = %s,
                 contact_phone = %s,
                 participants_count = %s,
                 status = %s,
                 additional_info = %s
             WHERE id = %s
         ''', (school_name, class_number, class_profile, excursion_date,
-              contact_person, contact_phone, participants_count, status,
+              contact_phone, participants_count, status,
               additional_info, booking_id))
         
         conn.commit()
@@ -1079,7 +1131,7 @@ def delete_booking(booking_id):
 @app.route('/admin/update_status/<int:booking_id>', methods=['POST'])
 @admin_required
 def update_status(booking_id):
-    """Обновление статуса записи"""
+    """Обновление статуса записи - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     if request.method == 'POST':
         status = request.form.get('status')
         try:
@@ -1139,12 +1191,14 @@ def clear_all():
         <html>
         <head>
             <title>Очистка базы данных</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <style>
-                body { font-family: Arial; padding: 40px; text-align: center; background: #f5f5f5; }
-                .warning-box { max-width: 600px; margin: 50px auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+                body { font-family: Arial; padding: 20px; text-align: center; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+                .warning-box { max-width: 600px; width: 100%; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
                 .danger-zone { background: #fff3cd; border: 2px solid #ffeaa7; padding: 20px; border-radius: 10px; margin: 20px 0; }
-                .btn-danger { background: #e74c3c; color: white; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 1.1em; margin: 10px; }
-                .btn-secondary { background: #95a5a6; color: white; padding: 15px 30px; border: none; border-radius: 5px; text-decoration: none; display: inline-block; }
+                .btn-danger { background: #e74c3c; color: white; padding: 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; margin: 10px 0; }
+                .btn-secondary { background: #95a5a6; color: white; padding: 15px; border-radius: 5px; text-decoration: none; display: block; text-align: center; }
+                input { padding: 12px; font-size: 16px; margin: 20px 0; width: 100%; border: 2px solid #e74c3c; border-radius: 5px; }
             </style>
         </head>
         <body>
@@ -1160,9 +1214,7 @@ def clear_all():
                 
                 <form method="POST">
                     <p>Для подтверждения введите "УДАЛИТЬ ВСЕ" в поле ниже:</p>
-                    <input type="text" name="confirmation" placeholder="УДАЛИТЬ ВСЕ" 
-                           style="padding: 12px; font-size: 1.2em; margin: 20px 0; width: 80%; border: 2px solid #e74c3c;">
-                    <br><br>
+                    <input type="text" name="confirmation" placeholder="УДАЛИТЬ ВСЕ" required>
                     <button type="submit" class="btn-danger">
                         <strong>УДАЛИТЬ ВСЕ ЗАПИСИ</strong>
                     </button>
@@ -1183,7 +1235,6 @@ def clear_all():
                 cursor.execute('DELETE FROM bookings')
                 conn.commit()
                 
-                # Получаем количество удаленных записей
                 cursor.execute('SELECT COUNT(*) FROM bookings')
                 remaining = cursor.fetchone()[0]
                 
@@ -1199,9 +1250,6 @@ def clear_all():
                     <div style="margin-top: 30px;">
                         <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
                             Вернуться в админ-панель
-                        </a>
-                        <a href="/" style="display: inline-block; padding: 12px 24px; background: #2ecc71; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
-                            Перейти к календарю
                         </a>
                     </div>
                 </body>
@@ -1261,7 +1309,6 @@ def health():
 
 if __name__ == '__main__':
     init_database()
-    # Запускаем keep-alive при старте
     start_keep_alive()
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)

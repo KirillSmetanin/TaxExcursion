@@ -880,264 +880,6 @@ def fix_database():
             </html>
             ''', 500
 
-@app.route('/admin/fix_database', methods=['GET', 'POST'])
-@admin_required
-def fix_database():
-    """Исправление структуры базы данных с выбором метода"""
-    if request.method == 'GET':
-        return '''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Исправление базы данных</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <style>
-                body { font-family: Arial; padding: 20px; background: #f5f5f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-                .container { max-width: 800px; width: 100%; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-                .option-box { border: 2px solid; padding: 20px; border-radius: 10px; margin: 20px 0; }
-                .option-danger { border-color: #e74c3c; background: #ffe6e6; }
-                .option-warning { border-color: #f39c12; background: #fff3cd; }
-                .option-safe { border-color: #2ecc71; background: #e8f6ef; }
-                .btn { display: inline-block; padding: 15px 30px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; margin: 10px 0; text-decoration: none; text-align: center; }
-                .btn-danger { background: #e74c3c; color: white; }
-                .btn-warning { background: #f39c12; color: white; }
-                .btn-success { background: #2ecc71; color: white; }
-                .btn-secondary { background: #95a5a6; color: white; }
-                input { width: 100%; padding: 12px; margin: 15px 0; border: 2px solid #3498db; border-radius: 5px; font-size: 16px; }
-                @media (max-width: 768px) {
-                    .container { padding: 20px; }
-                    .btn { padding: 12px 24px; }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h1>🔧 Выберите способ исправления базы данных</h1>
-                
-                <!-- ОПЦИЯ 1: Радикальное исправление -->
-                <div class="option-box option-danger">
-                    <h2 style="color: #e74c3c;">🚀 РАДИКАЛЬНОЕ ИСПРАВЛЕНИЕ</h2>
-                    <p><strong>Полностью удаляет ВСЕ данные и создает чистую базу!</strong></p>
-                    <ul>
-                        <li>✅ Удаляет все таблицы</li>
-                        <li>✅ Создает новую чистую структуру</li>
-                        <li>✅ Добавляет тестовые данные</li>
-                        <li>❌ ВСЕ существующие данные будут УДАЛЕНЫ!</li>
-                        <li>❌ Восстановление невозможно!</li>
-                    </ul>
-                    <form method="POST">
-                        <input type="hidden" name="method" value="radical">
-                        <p>Для подтверждения введите "УДАЛИТЬ ВСЁ":</p>
-                        <input type="text" name="confirmation" placeholder="УДАЛИТЬ ВСЁ" required>
-                        <button type="submit" class="btn btn-danger">
-                            <strong>🚀 ЗАПУСТИТЬ РАДИКАЛЬНОЕ ИСПРАВЛЕНИЕ</strong>
-                        </button>
-                    </form>
-                </div>
-                
-                <!-- ОПЦИЯ 2: Мягкое исправление -->
-                <div class="option-box option-warning">
-                    <h2 style="color: #f39c12;">🔄 МЯГКОЕ ИСПРАВЛЕНИЕ</h2>
-                    <p><strong>Пытается сохранить существующие данные</strong></p>
-                    <ul>
-                        <li>✅ Сохраняет существующие записи (если возможно)</li>
-                        <li>✅ Исправляет структуру таблиц</li>
-                        <li>✅ Создает недостающие таблицы</li>
-                        <li>⚠️ Могут быть ошибки при переносе данных</li>
-                        <li>⚠️ Некоторые данные могут быть потеряны</li>
-                    </ul>
-                    <form method="POST">
-                        <input type="hidden" name="method" value="soft">
-                        <p>Для подтверждения введите "СОХРАНИТЬ ДАННЫЕ":</p>
-                        <input type="text" name="confirmation" placeholder="СОХРАНИТЬ ДАННЫЕ" required>
-                        <button type="submit" class="btn btn-warning">
-                            <strong>🔄 ЗАПУСТИТЬ МЯГКОЕ ИСПРАВЛЕНИЕ</strong>
-                        </button>
-                    </form>
-                </div>
-                
-                <!-- ОПЦИЯ 3: Быстрая проверка -->
-                <div class="option-box option-safe">
-                    <h2 style="color: #2ecc71;">🔍 ПРОВЕРИТЬ СТРУКТУРУ</h2>
-                    <p><strong>Только проверка без изменений</strong></p>
-                    <ul>
-                        <li>✅ Показывает текущую структуру</li>
-                        <li>✅ Проверяет наличие таблиц</li>
-                        <li>✅ Показывает количество записей</li>
-                        <li>✅ Безопасно - ничего не изменяет</li>
-                    </ul>
-                    <form method="POST">
-                        <input type="hidden" name="method" value="check">
-                        <button type="submit" class="btn btn-success">
-                            <strong>🔍 ЗАПУСТИТЬ ПРОВЕРКУ СТРУКТУРЫ</strong>
-                        </button>
-                    </form>
-                </div>
-                
-                <a href="/admin" class="btn btn-secondary">Отмена - вернуться в админ-панель</a>
-            </div>
-        </body>
-        </html>
-        '''
-    
-    if request.method == 'POST':
-        method = request.form.get('method')
-        confirmation = request.form.get('confirmation', '')
-        
-        # Импортируем функции из database_fix
-        from database_fix import reset_database_radical, fix_database_soft, get_db_connection
-        
-        if method == 'radical':
-            if confirmation != 'УДАЛИТЬ ВСЁ':
-                return '''
-                <!DOCTYPE html>
-                <html>
-                <body style="font-family: Arial; padding: 40px; text-align: center;">
-                    <h1 style="color: #e74c3c;">❌ Неверное подтверждение</h1>
-                    <p>Для радикального исправления нужно ввести "УДАЛИТЬ ВСЁ"</p>
-                    <a href="/admin/fix_database">Попробовать снова</a>
-                </body>
-                </html>
-                '''
-            
-            success, results = reset_database_radical()
-            
-        elif method == 'soft':
-            if confirmation != 'СОХРАНИТЬ ДАННЫЕ':
-                return '''
-                <!DOCTYPE html>
-                <html>
-                <body style="font-family: Arial; padding: 40px; text-align: center;">
-                    <h1 style="color: #e74c3c;">❌ Неверное подтверждение</h1>
-                    <p>Для мягкого исправления нужно ввести "СОХРАНИТЬ ДАННЫЕ"</p>
-                    <a href="/admin/fix_database">Попробовать снова</a>
-                </body>
-                </html>
-                '''
-            
-            success, results = fix_database_soft()
-            
-        elif method == 'check':
-            # Только проверка структуры
-            results = []
-            try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                
-                results.append("<strong>🔍 Проверка структуры базы данных:</strong>")
-                
-                # Проверяем таблицу bookings
-                cursor.execute("SELECT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'bookings')")
-                bookings_exists = cursor.fetchone()[0]
-                
-                if bookings_exists:
-                    results.append("<br><strong>📊 Таблица bookings:</strong>")
-                    
-                    cursor.execute("SELECT COUNT(*) FROM bookings")
-                    count = cursor.fetchone()[0]
-                    results.append(f"   📊 Количество записей: {count}")
-                    
-                    cursor.execute("""
-                        SELECT column_name, data_type, is_nullable 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'bookings'
-                        ORDER BY ordinal_position
-                    """)
-                    
-                    columns = cursor.fetchall()
-                    for col in columns:
-                        results.append(f"   - {col[0]} ({col[1]}) {'NULL' if col[2] == 'YES' else 'NOT NULL'}")
-                else:
-                    results.append("<br>❌ Таблица bookings не существует")
-                
-                # Проверяем таблицу blocked_dates
-                cursor.execute("SELECT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'blocked_dates')")
-                blocked_exists = cursor.fetchone()[0]
-                
-                if blocked_exists:
-                    results.append("<br><strong>📊 Таблица blocked_dates:</strong>")
-                    
-                    cursor.execute("SELECT COUNT(*) FROM blocked_dates")
-                    count = cursor.fetchone()[0]
-                    results.append(f"   📊 Количество заблокированных дат: {count}")
-                else:
-                    results.append("<br>❌ Таблица blocked_dates не существует")
-                
-                cursor.close()
-                conn.close()
-                
-                success = True
-                results.append("<br><strong style='color: #2ecc71;'>✅ Проверка завершена</strong>")
-                
-            except Exception as e:
-                success = False
-                results.append(f"<br><strong style='color: #e74c3c;'>❌ Ошибка проверки: {str(e)}</strong>")
-        else:
-            return redirect('/admin/fix_database')
-        
-        html_result = "<br>".join(results)
-        
-        if success:
-            return f'''
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Результат исправления базы</title>
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <style>
-                    body {{ font-family: Arial; padding: 20px; background: #f5f5f5; }}
-                    .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }}
-                    .success-box {{ background: #d4edda; border: 2px solid #c3e6cb; padding: 20px; border-radius: 10px; margin: 20px 0; }}
-                    .results {{ margin: 20px 0; padding: 20px; background: #f8f9fa; border-radius: 5px; max-height: 500px; overflow-y: auto; font-family: monospace; font-size: 14px; line-height: 1.4; }}
-                    .btn {{ display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; font-size: 14px; }}
-                    @media (max-width: 768px) {{
-                        .container {{ padding: 20px; }}
-                        .btn {{ width: 100%; margin: 5px 0; text-align: center; }}
-                    }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1 style="color: #2ecc71;">✅ Операция завершена</h1>
-                    
-                    <div class="success-box">
-                        <h2>{"Радикальное исправление" if method == 'radical' else "Мягкое исправление" if method == 'soft' else "Проверка структуры"} выполнено!</h2>
-                    </div>
-                    
-                    <div class="results">
-                        {html_result}
-                    </div>
-                    
-                    <div style="margin-top: 30px;">
-                        <a href="/admin" class="btn">Вернуться в админ-панель</a>
-                        <a href="/" class="btn" style="background: #2ecc71;">Перейти к календарю</a>
-                        <a href="/admin/fix_database" class="btn" style="background: #f39c12;">Вернуться к выбору метода</a>
-                    </div>
-                </div>
-            </body>
-            </html>
-            '''
-        else:
-            return f'''
-            <!DOCTYPE html>
-            <html>
-            <body style="font-family: Arial; padding: 40px; text-align: center;">
-                <h1 style="color: #e74c3c;">❌ Ошибка исправления базы</h1>
-                <div style="background: #ffe6e6; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: left;">
-                    {html_result}
-                </div>
-                <div style="margin-top: 30px;">
-                    <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
-                        Вернуться в админ-панель
-                    </a>
-                    <a href="/admin/fix_database" style="display: inline-block; padding: 12px 24px; background: #e74c3c; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
-                        Попробовать снова
-                    </a>
-                </div>
-            </body>
-            </html>
-            ''', 500
-
 @app.route('/admin/edit/<int:booking_id>', methods=['GET', 'POST'])
 @admin_required
 def edit_booking(booking_id):
@@ -1384,6 +1126,252 @@ def health():
             'dАatabase': 'disconnected',
             'error': str(e)
         }, 500
+    
+@app.route('/admin/reset_database', methods=['GET', 'POST'])
+@admin_required
+def admin_reset_database():
+    """Простой сброс базы данных"""
+    if request.method == 'GET':
+        return '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Сброс базы данных</title>
+            <style>
+                body { font-family: Arial; padding: 40px; text-align: center; }
+                .warning { background: #ffe6e6; padding: 20px; border-radius: 10px; margin: 20px auto; max-width: 600px; }
+                .btn { padding: 12px 24px; margin: 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+                .btn-danger { background: #e74c3c; color: white; }
+                .btn-secondary { background: #95a5a6; color: white; }
+                input { padding: 10px; font-size: 16px; width: 300px; margin: 10px; }
+            </style>
+        </head>
+        <body>
+            <h1>🚀 Полный сброс базы данных</h1>
+            
+            <div class="warning">
+                <h2 style="color: #e74c3c;">⚠️ ВНИМАНИЕ!</h2>
+                <p><strong>Эта операция:</strong></p>
+                <ul>
+                    <li>Удалит ВСЕ существующие данные</li>
+                    <li>Создаст чистые таблицы с правильной структурой</li>
+                    <li>Добавит тестовые данные</li>
+                    <li><strong>Восстановление невозможно!</strong></li>
+                </ul>
+            </div>
+            
+            <form method="POST">
+                <p>Для подтверждения введите "УДАЛИТЬ ВСЕ":</p>
+                <input type="text" name="confirmation" placeholder="УДАЛИТЬ ВСЕ" required>
+                <br>
+                <button type="submit" class="btn btn-danger">
+                    <strong>🚀 ЗАПУСТИТЬ ПОЛНЫЙ СБРОС БАЗЫ</strong>
+                </button>
+                <br>
+                <a href="/admin" class="btn btn-secondary">Отмена - вернуться в админ-панель</a>
+            </form>
+        </body>
+        </html>
+        '''
+    
+    if request.method == 'POST':
+        confirmation = request.form.get('confirmation')
+        if confirmation != 'УДАЛИТЬ ВСЕ':
+            return '''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ Неверное подтверждение</h1>
+                <p>Для сброса базы нужно ввести "УДАЛИТЬ ВСЕ"</p>
+                <a href="/admin/reset_database">Попробовать снова</a>
+            </body>
+            </html>
+            '''
+        
+        # Запускаем сброс базы
+        success, results = recreate_database()
+        html_result = "<br>".join(results)
+        
+        if success:
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial; padding: 20px; background: #f5f5f5; }}
+                    .container {{ max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }}
+                    .success {{ background: #e8f6ef; padding: 20px; border-radius: 10px; }}
+                    .results {{ padding: 20px; background: #f8f9fa; border-radius: 5px; }}
+                    .btn {{ padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1 style="color: #2ecc71;">✅ База данных успешно пересоздана!</h1>
+                    <div class="success">
+                        <p><strong>Операция выполнена успешно!</strong></p>
+                    </div>
+                    <div class="results">
+                        {html_result}
+                    </div>
+                    <div style="margin-top: 30px;">
+                        <a href="/admin" class="btn">Вернуться в админ-панель</a>
+                        <a href="/" class="btn" style="background: #2ecc71;">Перейти к календарю</a>
+                    </div>
+                </div>
+            </body>
+            </html>
+            '''
+        else:
+            return f'''
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family: Arial; padding: 40px; text-align: center;">
+                <h1 style="color: #e74c3c;">❌ Ошибка сброса базы</h1>
+                <div style="background: #ffe6e6; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: left;">
+                    {html_result}
+                </div>
+                <div>
+                    <a href="/admin" style="padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
+                        Вернуться в админ-панель
+                    </a>
+                    <a href="/admin/reset_database" style="padding: 10px 20px; background: #e74c3c; color: white; text-decoration: none; border-radius: 5px; margin: 10px;">
+                        Попробовать снова
+                    </a>
+                </div>
+            </body>
+            </html>
+            ''', 500
+
+def recreate_database():
+    """Полный сброс и пересоздание базы данных"""
+    results = []
+    
+    try:
+        results.append("<strong>🚀 ЗАПУСК ПОЛНОГО СБРОСА БАЗЫ ДАННЫХ...</strong>")
+        results.append("<br><strong style='color: #e74c3c;'>⚠️ ВНИМАНИЕ: ВСЕ ДАННЫЕ БУДУТ УДАЛЕНЫ!</strong>")
+        
+        # Подключаемся к базе
+        conn = get_db_connection()
+        conn.autocommit = False
+        
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Удаляем все таблицы если они существуют
+            results.append("<br><strong>📊 Шаг 1: Удаление существующих таблиц...</strong>")
+            
+            cursor.execute("DROP TABLE IF EXISTS bookings CASCADE")
+            results.append("   ✅ Таблица bookings удалена")
+            
+            cursor.execute("DROP TABLE IF EXISTS blocked_dates CASCADE")
+            results.append("   ✅ Таблица blocked_dates удалена")
+            
+            # Коммитим удаление
+            conn.commit()
+            results.append("   ✅ Все таблицы удалены")
+            
+            # 2. Создаем таблицу bookings с правильной структурой
+            results.append("<br><strong>📊 Шаг 2: Создание новой таблицы bookings...</strong>")
+            
+            cursor.execute('''
+                CREATE TABLE bookings (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL,
+                    school_name VARCHAR(200) NOT NULL,
+                    class_number VARCHAR(20) NOT NULL,
+                    class_profile VARCHAR(100),
+                    excursion_date DATE NOT NULL,
+                    contact_phone VARCHAR(20) NOT NULL,
+                    participants_count INTEGER NOT NULL,
+                    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    additional_info TEXT,
+                    status VARCHAR(20) DEFAULT 'pending'
+                )
+            ''')
+            
+            results.append("   ✅ Таблица bookings создана")
+            
+            # 3. Создаем таблицу blocked_dates
+            results.append("<br><strong>📊 Шаг 3: Создание таблицы blocked_dates...</strong>")
+            
+            cursor.execute('''
+                CREATE TABLE blocked_dates (
+                    id SERIAL PRIMARY KEY,
+                    blocked_date DATE NOT NULL UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            results.append("   ✅ Таблица blocked_dates создана")
+            
+            # 4. Добавляем индексы для ускорения поиска
+            results.append("<br><strong>📊 Шаг 4: Создание индексов...</strong>")
+            
+            cursor.execute('CREATE INDEX idx_bookings_date ON bookings(excursion_date)')
+            cursor.execute('CREATE INDEX idx_bookings_status ON bookings(status)')
+            cursor.execute('CREATE INDEX idx_bookings_school ON bookings(school_name)')
+            
+            results.append("   ✅ Индексы созданы")
+            
+            # 5. Тестируем вставку
+            results.append("<br><strong>📊 Шаг 5: Тестирование вставки данных...</strong>")
+            
+            # Тестовые данные
+            cursor.execute('''
+                INSERT INTO bookings 
+                (username, school_name, class_number, class_profile, 
+                 excursion_date, contact_phone, participants_count, status, additional_info)
+                VALUES 
+                ('Иванов Иван Иванович', 'Гимназия №1', '10А', 'Физмат', 
+                 '2024-03-15', '+79991234567', 25, 'pending', 'Первая тестовая запись'),
+                ('Петрова Анна Сергеевна', 'Лицей №2', '11Б', 'Гуманитарный', 
+                 '2024-03-16', '+79997654321', 20, 'confirmed', 'Вторая тестовая запись'),
+                ('Сидоров Алексей Петрович', 'Школа №3', '9В', '', 
+                 '2024-03-17', '+79995554433', 15, 'pending', 'Третья тестовая запись')
+            ''')
+            
+            # Тестовая заблокированная дата
+            cursor.execute('INSERT INTO blocked_dates (blocked_date) VALUES (%s)', ('2024-03-18',))
+            
+            results.append("   ✅ Тестовые данные добавлены")
+            
+            # 6. Проверяем структуру
+            results.append("<br><strong>📊 Шаг 6: Проверка структуры базы...</strong>")
+            
+            cursor.execute("SELECT COUNT(*) FROM bookings")
+            bookings_count = cursor.fetchone()[0]
+            results.append(f"   📊 Записей в bookings: {bookings_count}")
+            
+            cursor.execute("SELECT COUNT(*) FROM blocked_dates")
+            blocked_count = cursor.fetchone()[0]
+            results.append(f"   📊 Заблокированных дат: {blocked_count}")
+            
+            # Финализируем
+            conn.commit()
+            
+            results.append("<br><strong style='color: #2ecc71;'>✅ БАЗА ДАННЫХ УСПЕШНО ПЕРЕСОЗДАНА!</strong>")
+            results.append("<br>Структура базы:")
+            results.append("   • bookings - таблица бронирований")
+            results.append("   • blocked_dates - таблица заблокированных дат")
+            results.append("   • Все индексы созданы")
+            results.append("   • Тестовые данные добавлены")
+            
+            cursor.close()
+            conn.close()
+            
+            return True, results
+            
+        except Exception as e:
+            # Откатываем изменения при ошибке
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            raise e
+            
+    except Exception as e:
+        results.append(f"<br><strong style='color: #e74c3c;'>❌ КРИТИЧЕСКАЯ ОШИБКА: {str(e)}</strong>")
+        return False, results
 
 if __name__ == '__main__':
     init_database()

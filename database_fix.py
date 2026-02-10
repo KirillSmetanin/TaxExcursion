@@ -1,4 +1,4 @@
-# database_fix.py
+# database_fix.py - Инструменты для работы с базой данных
 import os
 import urllib.parse
 import psycopg
@@ -28,114 +28,333 @@ def get_db_connection():
     
     return conn
 
-def fix_database_operation():
-    """Основная операция исправления базы данных"""
+def reset_database_radical():
+    """РАДИКАЛЬНОЕ решение: полный сброс базы данных (удаляет все данные!)"""
+    results = []
+    
+    try:
+        results.append("<strong>🚀 ЗАПУСК ПОЛНОГО СБРОСА БАЗЫ ДАННЫХ...</strong>")
+        results.append("<br><strong style='color: #e74c3c;'>⚠️ ВНИМАНИЕ: ВСЕ ДАННЫЕ БУДУТ УДАЛЕНЫ!</strong>")
+        
+        # Подключаемся к базе
+        conn = get_db_connection()
+        conn.autocommit = False
+        
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Удаляем все таблицы если они существуют
+            results.append("<br><strong>📊 Шаг 1: Удаление существующих таблиц...</strong>")
+            
+            # Получаем список всех таблиц
+            cursor.execute("""
+                SELECT tablename 
+                FROM pg_tables 
+                WHERE schemaname = 'public'
+            """)
+            
+            tables = cursor.fetchall()
+            for table in tables:
+                table_name = table[0]
+                try:
+                    cursor.execute(f'DROP TABLE IF EXISTS {table_name} CASCADE')
+                    results.append(f"   ✅ Удалена таблица: {table_name}")
+                except Exception as e:
+                    results.append(f"   ⚠️  Не удалось удалить {table_name}: {str(e)}")
+            
+            # Коммитим удаление
+            conn.commit()
+            results.append("   ✅ Все таблицы удалены")
+            
+            # 2. Создаем таблицу bookings с правильной структурой
+            results.append("<br><strong>📊 Шаг 2: Создание новой таблицы bookings...</strong>")
+            
+            cursor.execute('''
+                CREATE TABLE bookings (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL,
+                    school_name VARCHAR(200) NOT NULL,
+                    class_number VARCHAR(20) NOT NULL,
+                    class_profile VARCHAR(100),
+                    excursion_date DATE NOT NULL,
+                    contact_phone VARCHAR(20) NOT NULL,
+                    participants_count INTEGER NOT NULL,
+                    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    additional_info TEXT,
+                    status VARCHAR(20) DEFAULT 'pending'
+                )
+            ''')
+            
+            results.append("   ✅ Таблица bookings создана")
+            
+            # 3. Создаем таблицу blocked_dates
+            results.append("<br><strong>📊 Шаг 3: Создание таблицы blocked_dates...</strong>")
+            
+            cursor.execute('''
+                CREATE TABLE blocked_dates (
+                    id SERIAL PRIMARY KEY,
+                    blocked_date DATE NOT NULL UNIQUE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            results.append("   ✅ Таблица blocked_dates создана")
+            
+            # 4. Добавляем индекс для ускорения поиска
+            results.append("<br><strong>📊 Шаг 4: Создание индексов...</strong>")
+            
+            cursor.execute('CREATE INDEX idx_bookings_date ON bookings(excursion_date)')
+            cursor.execute('CREATE INDEX idx_bookings_status ON bookings(status)')
+            cursor.execute('CREATE INDEX idx_bookings_school ON bookings(school_name)')
+            
+            results.append("   ✅ Индексы созданы")
+            
+            # 5. Тестируем вставку
+            results.append("<br><strong>📊 Шаг 5: Тестирование вставки данных...</strong>")
+            
+            # Тестовые данные
+            test_data = [
+                ('Иванов Иван Иванович', 'Гимназия №1', '10А', 'Физмат', 
+                 '2024-03-15', '+79991234567', 25, 'pending', 'Первая тестовая запись'),
+                ('Петрова Анна Сергеевна', 'Лицей №2', '11Б', 'Гуманитарный', 
+                 '2024-03-16', '+79997654321', 20, 'confirmed', 'Вторая тестовая запись'),
+                ('Сидоров Алексей Петрович', 'Школа №3', '9В', '', 
+                 '2024-03-17', '+79995554433', 15, 'pending', 'Третья тестовая запись')
+            ]
+            
+            for data in test_data:
+                cursor.execute('''
+                    INSERT INTO bookings 
+                    (username, school_name, class_number, class_profile, 
+                     excursion_date, contact_phone, participants_count, status, additional_info)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', data)
+            
+            # Тестовая заблокированная дата
+            cursor.execute('INSERT INTO blocked_dates (blocked_date) VALUES (%s)', ('2024-03-18',))
+            
+            results.append("   ✅ Тестовые данные добавлены")
+            
+            # 6. Проверяем структуру
+            results.append("<br><strong>📊 Шаг 6: Проверка структуры базы...</strong>")
+            
+            cursor.execute("SELECT COUNT(*) FROM bookings")
+            bookings_count = cursor.fetchone()[0]
+            results.append(f"   📊 Записей в bookings: {bookings_count}")
+            
+            cursor.execute("SELECT COUNT(*) FROM blocked_dates")
+            blocked_count = cursor.fetchone()[0]
+            results.append(f"   📊 Заблокированных дат: {blocked_count}")
+            
+            # Показываем структуру bookings
+            results.append("<br><strong>Структура таблицы bookings:</strong>")
+            cursor.execute("""
+                SELECT column_name, data_type, is_nullable 
+                FROM information_schema.columns 
+                WHERE table_name = 'bookings'
+                ORDER BY ordinal_position
+            """)
+            
+            columns = cursor.fetchall()
+            for col in columns:
+                results.append(f"   - {col[0]} ({col[1]}) {'NULL' if col[2] == 'YES' else 'NOT NULL'}")
+            
+            # Показываем структуру blocked_dates
+            results.append("<br><strong>Структура таблицы blocked_dates:</strong>")
+            cursor.execute("""
+                SELECT column_name, data_type, is_nullable 
+                FROM information_schema.columns 
+                WHERE table_name = 'blocked_dates'
+                ORDER BY ordinal_position
+            """)
+            
+            columns = cursor.fetchall()
+            for col in columns:
+                results.append(f"   - {col[0]} ({col[1]}) {'NULL' if col[2] == 'YES' else 'NOT NULL'}")
+            
+            # Финализируем
+            conn.commit()
+            
+            results.append("<br><strong style='color: #2ecc71;'>✅ БАЗА ДАННЫХ УСПЕШНО ПЕРЕСОЗДАНА!</strong>")
+            results.append("<br>Структура базы:")
+            results.append("   • bookings - таблица бронирований")
+            results.append("   • blocked_dates - таблица заблокированных дат")
+            results.append("   • Все индексы созданы")
+            results.append("   • Тестовые данные добавлены")
+            
+            cursor.close()
+            conn.close()
+            
+            return True, results
+            
+        except Exception as e:
+            # Откатываем изменения при ошибке
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            raise e
+            
+    except Exception as e:
+        results.append(f"<br><strong style='color: #e74c3c;'>❌ КРИТИЧЕСКАЯ ОШИБКА: {str(e)}</strong>")
+        return False, results
+
+def fix_database_soft():
+    """Мягкое исправление: сохраняет существующие данные"""
     results = []
     
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        results.append("<strong>🚀 Запуск полного исправления базы данных...</strong>")
+        results.append("<strong>🚀 Запуск мягкого исправления базы данных...</strong>")
+        results.append("<br><strong style='color: #f39c12;'>⚠️ Пытаемся сохранить существующие данные</strong>")
         
         # 1. Проверяем текущую структуру
         results.append("<br><strong>📊 Текущая структура таблицы bookings:</strong>")
-        cursor.execute("""
-            SELECT column_name, data_type, is_nullable 
-            FROM information_schema.columns 
-            WHERE table_name = 'bookings'
-            ORDER BY ordinal_position
-        """)
-        
-        columns = cursor.fetchall()
-        for col in columns:
-            results.append(f"  - {col[0]} ({col[1]}) {'NULL' if col[2] == 'YES' else 'NOT NULL'}")
-        
-        # 2. Удаляем колонку contact_person если она существует
-        results.append("<br><strong>🔧 Шаг 1: Удаляем колонку contact_person...</strong>")
         try:
             cursor.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name = 'bookings' AND column_name = 'contact_person'
+                SELECT column_name, data_type, is_nullable 
+                FROM information_schema.columns 
+                WHERE table_name = 'bookings'
+                ORDER BY ordinal_position
             """)
             
-            if cursor.fetchone():
-                # Если есть записи с NULL в contact_person, устанавливаем значения по умолчанию
-                cursor.execute("SELECT COUNT(*) FROM bookings WHERE contact_person IS NULL")
-                null_count = cursor.fetchone()[0]
-                
-                if null_count > 0:
-                    cursor.execute("UPDATE bookings SET contact_person = 'УДАЛЕНО_ПРИ_МИГРАЦИИ' WHERE contact_person IS NULL")
-                    results.append(f"   ✅ Обновлено {null_count} записей с NULL значениями")
-                
-                # Удаляем колонку
-                cursor.execute("ALTER TABLE bookings DROP COLUMN contact_person")
-                results.append("   ✅ Колонка contact_person успешно удалена")
+            columns = cursor.fetchall()
+            if columns:
+                for col in columns:
+                    results.append(f"  - {col[0]} ({col[1]}) {'NULL' if col[2] == 'YES' else 'NOT NULL'}")
             else:
-                results.append("   ✅ Колонка contact_person уже удалена")
-                
-        except Exception as e:
-            results.append(f"   ❌ Ошибка удаления contact_person: {str(e)}")
-            results.append("   🔧 Пробуем альтернативный подход...")
+                results.append("   ℹ️ Таблица bookings не существует или пуста")
+        except:
+            results.append("   ℹ️ Не удалось получить структуру таблицы")
+        
+        # 2. Проверяем существование таблицы bookings
+        cursor.execute("SELECT EXISTS (SELECT 1 FROM pg_tables WHERE tablename = 'bookings')")
+        table_exists = cursor.fetchone()[0]
+        
+        if table_exists:
+            results.append("<br><strong>🔧 Сохраняем существующие данные...</strong>")
             
             try:
-                # Если не получается удалить, убираем NOT NULL ограничение
-                cursor.execute("ALTER TABLE bookings ALTER COLUMN contact_person DROP NOT NULL")
-                results.append("   ✅ Убрано ограничение NOT NULL")
-                
-                # Устанавливаем значения по умолчанию
-                cursor.execute("UPDATE bookings SET contact_person = 'УДАЛЕНО' WHERE contact_person IS NULL")
-                results.append("   ✅ Установлены значения по умолчанию")
-                
-                # Пробуем снова
-                cursor.execute("ALTER TABLE bookings DROP COLUMN contact_person")
-                results.append("   ✅ Колонка contact_person удалена (второй подход)")
-                
-            except Exception as e2:
-                results.append(f"   ❌ Критическая ошибка: {str(e2)}")
-        
-        # 3. Добавляем колонку status если её нет
-        results.append("<br><strong>🔧 Шаг 2: Добавляем колонку status...</strong>")
-        try:
-            cursor.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name = 'bookings' AND column_name = 'status'
-            """)
-            
-            if not cursor.fetchone():
+                # Создаем временную таблицу для сохранения данных
                 cursor.execute('''
-                    ALTER TABLE bookings 
-                    ADD COLUMN status VARCHAR(20) DEFAULT 'pending'
+                    CREATE TABLE IF NOT EXISTS temp_backup (
+                        id SERIAL PRIMARY KEY,
+                        username VARCHAR(100),
+                        school_name VARCHAR(200),
+                        class_number VARCHAR(20),
+                        class_profile VARCHAR(100),
+                        excursion_date DATE,
+                        contact_phone VARCHAR(20),
+                        participants_count INTEGER,
+                        booking_date TIMESTAMP,
+                        additional_info TEXT,
+                        status VARCHAR(20)
+                    )
                 ''')
-                results.append("   ✅ Колонка status добавлена")
-            else:
-                results.append("   ✅ Колонка status уже существует")
                 
-        except Exception as e:
-            results.append(f"   ❌ Ошибка добавления status: {str(e)}")
+                # Копируем данные в бэкап
+                cursor.execute('TRUNCATE TABLE temp_backup')
+                
+                try:
+                    cursor.execute('''
+                        INSERT INTO temp_backup 
+                        (username, school_name, class_number, class_profile, 
+                         excursion_date, contact_phone, participants_count, 
+                         booking_date, additional_info, status)
+                        SELECT 
+                            username, 
+                            school_name, 
+                            class_number, 
+                            COALESCE(class_profile, '') as class_profile,
+                            excursion_date, 
+                            contact_phone, 
+                            participants_count, 
+                            booking_date, 
+                            COALESCE(additional_info, '') as additional_info,
+                            COALESCE(status, 'pending') as status
+                        FROM bookings
+                    ''')
+                    
+                    backup_count = cursor.rowcount
+                    results.append(f"   ✅ Сохранено {backup_count} записей в бэкап")
+                except Exception as e:
+                    results.append(f"   ⚠️  Ошибка бэкапа: {str(e)}")
+                    backup_count = 0
+                
+            except Exception as e:
+                results.append(f"   ⚠️  Не удалось создать бэкап: {str(e)}")
+                backup_count = 0
         
-        # 4. Добавляем колонку additional_info если её нет
-        results.append("<br><strong>🔧 Шаг 3: Добавляем колонку additional_info...</strong>")
+        # 3. Удаляем старую таблицу и создаем новую
+        results.append("<br><strong>🔧 Создаем новую структуру...</strong>")
+        
         try:
-            cursor.execute("""
-                SELECT column_name FROM information_schema.columns 
-                WHERE table_name = 'bookings' AND column_name = 'additional_info'
-            """)
+            cursor.execute('DROP TABLE IF EXISTS bookings CASCADE')
+            results.append("   ✅ Старая таблица удалена")
             
-            if not cursor.fetchone():
-                cursor.execute('''
-                    ALTER TABLE bookings 
-                    ADD COLUMN additional_info TEXT
-                ''')
-                results.append("   ✅ Колонка additional_info добавлена")
-            else:
-                results.append("   ✅ Колонка additional_info уже существует")
-                
+            cursor.execute('''
+                CREATE TABLE bookings (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) NOT NULL,
+                    school_name VARCHAR(200) NOT NULL,
+                    class_number VARCHAR(20) NOT NULL,
+                    class_profile VARCHAR(100),
+                    excursion_date DATE NOT NULL,
+                    contact_phone VARCHAR(20) NOT NULL,
+                    participants_count INTEGER NOT NULL,
+                    booking_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    additional_info TEXT,
+                    status VARCHAR(20) DEFAULT 'pending'
+                )
+            ''')
+            
+            results.append("   ✅ Новая таблица создана")
+            
         except Exception as e:
-            results.append(f"   ❌ Ошибка добавления additional_info: {str(e)}")
+            results.append(f"   ❌ Ошибка создания таблицы: {str(e)}")
+            conn.rollback()
+            return False, results
         
-        # 5. Создаем таблицу для заблокированных дат
-        results.append("<br><strong>🔧 Шаг 4: Создаем таблицу blocked_dates...</strong>")
+        # 4. Восстанавливаем данные из бэкапа если они есть
+        if 'backup_count' in locals() and backup_count > 0:
+            results.append("<br><strong>🔧 Восстанавливаем данные из бэкапа...</strong>")
+            
+            try:
+                cursor.execute('''
+                    INSERT INTO bookings 
+                    (username, school_name, class_number, class_profile, 
+                     excursion_date, contact_phone, participants_count, 
+                     booking_date, additional_info, status)
+                    SELECT 
+                        COALESCE(username, 'Не указано'),
+                        COALESCE(school_name, 'Не указано'),
+                        COALESCE(class_number, 'Не указано'),
+                        class_profile,
+                        excursion_date,
+                        COALESCE(contact_phone, 'Не указано'),
+                        COALESCE(participants_count, 0),
+                        COALESCE(booking_date, CURRENT_TIMESTAMP),
+                        additional_info,
+                        COALESCE(status, 'pending')
+                    FROM temp_backup
+                ''')
+                
+                restored_count = cursor.rowcount
+                results.append(f"   ✅ Восстановлено {restored_count} записей")
+                
+            except Exception as e:
+                results.append(f"   ⚠️  Ошибка восстановления: {str(e)}")
+        
+        # 5. Удаляем временную таблицу
+        try:
+            cursor.execute('DROP TABLE IF EXISTS temp_backup')
+            results.append("   ✅ Временная таблица удалена")
+        except:
+            pass
+        
+        # 6. Создаем таблицу blocked_dates если её нет
+        results.append("<br><strong>🔧 Создаем таблицу blocked_dates...</strong>")
         try:
             cursor.execute("""
                 SELECT EXISTS (
@@ -157,89 +376,25 @@ def fix_database_operation():
                 results.append("   ✅ Таблица blocked_dates уже существует")
                 
         except Exception as e:
-            results.append(f"   ❌ Ошибка создания blocked_dates: {str(e)}")
+            results.append(f"   ⚠️  Ошибка создания blocked_dates: {str(e)}")
         
-        # 6. Удаляем уникальные ограничения на excursion_date
-        results.append("<br><strong>🔧 Шаг 5: Удаляем уникальные ограничения...</strong>")
+        # 7. Создаем индексы
+        results.append("<br><strong>🔧 Создаем индексы...</strong>")
         try:
-            cursor.execute("""
-                SELECT constraint_name 
-                FROM information_schema.table_constraints 
-                WHERE table_name = 'bookings' 
-                AND constraint_type = 'UNIQUE'
-                AND constraint_name LIKE '%excursion_date%'
-            """)
-            
-            unique_constraints = cursor.fetchall()
-            if unique_constraints:
-                for constraint in unique_constraints:
-                    constraint_name = constraint[0]
-                    try:
-                        cursor.execute(f'ALTER TABLE bookings DROP CONSTRAINT IF EXISTS {constraint_name}')
-                        results.append(f"   ✅ Удалено уникальное ограничение: {constraint_name}")
-                    except Exception as e:
-                        results.append(f"   ❌ Ошибка удаления {constraint_name}: {str(e)}")
-            else:
-                results.append("   ✅ Уникальных ограничений на excursion_date нет")
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(excursion_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_school ON bookings(school_name)')
+            results.append("   ✅ Индексы созданы")
         except Exception as e:
-            results.append(f"   ❌ Ошибка проверки ограничений: {str(e)}")
+            results.append(f"   ⚠️  Ошибка создания индексов: {str(e)}")
         
-        # 7. Обновляем существующие записи
-        results.append("<br><strong>🔧 Шаг 6: Обновляем существующие записи...</strong>")
-        try:
-            cursor.execute("SELECT COUNT(*) FROM bookings")
-            total = cursor.fetchone()[0]
-            results.append(f"   📊 Всего записей: {total}")
-            
-            if total > 0:
-                # Устанавливаем статус для записей без статуса
-                cursor.execute("SELECT COUNT(*) FROM bookings WHERE status IS NULL")
-                null_status = cursor.fetchone()[0]
-                if null_status > 0:
-                    cursor.execute("UPDATE bookings SET status = 'pending' WHERE status IS NULL")
-                    results.append(f"   ✅ Установлен status='pending' для {null_status} записей")
-                    
-                # Проверяем наличие записей с contact_person (на всякий случай)
-                try:
-                    cursor.execute("SELECT COUNT(*) FROM bookings WHERE contact_person IS NOT NULL")
-                    has_contact_person = cursor.fetchone()[0]
-                    if has_contact_person > 0:
-                        results.append(f"   ⚠️  Обнаружено {has_contact_person} записей с contact_person")
-                except:
-                    pass
-        except Exception as e:
-            results.append(f"   ❌ Ошибка обновления записей: {str(e)}")
+        # 8. Финальная проверка
+        results.append("<br><strong>📊 Финальная структура базы:</strong>")
         
-        # 8. Тестируем вставку
-        results.append("<br><strong>🔧 Шаг 7: Тестируем вставку записи...</strong>")
-        try:
-            cursor.execute('''
-                INSERT INTO bookings 
-                (username, school_name, class_number, excursion_date, 
-                 contact_phone, participants_count, status, additional_info)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ''', (
-                'Тест Исправления', 
-                'Тестовая школа', 
-                '10А', 
-                '2024-01-01', 
-                '+79999999999', 
-                10, 
-                'pending', 
-                'Тестовая запись после исправления'
-            ))
-            
-            results.append("   ✅ Тестовая запись успешно добавлена")
-            
-            # Удаляем тестовую запись
-            cursor.execute("DELETE FROM bookings WHERE username = 'Тест Исправления'")
-            results.append("   ✅ Тестовая запись удалена")
-            
-        except Exception as e:
-            results.append(f"   ❌ Ошибка тестовой вставки: {str(e)}")
+        cursor.execute("SELECT COUNT(*) FROM bookings")
+        count = cursor.fetchone()[0]
+        results.append(f"   📊 Всего записей в bookings: {count}")
         
-        # 9. Выводим финальную структуру
-        results.append("<br><strong>📊 Финальная структура таблицы bookings:</strong>")
         cursor.execute("""
             SELECT column_name, data_type, is_nullable 
             FROM information_schema.columns 
@@ -249,13 +404,14 @@ def fix_database_operation():
         
         columns = cursor.fetchall()
         for col in columns:
-            results.append(f"  - {col[0]} ({col[1]}) {'NULL' if col[2] == 'YES' else 'NOT NULL'}")
+            results.append(f"   - {col[0]} ({col[1]}) {'NULL' if col[2] == 'YES' else 'NOT NULL'}")
         
         conn.commit()
         cursor.close()
         conn.close()
         
-        # Возвращаем результаты
+        results.append("<br><strong style='color: #2ecc71;'>✅ МЯГКОЕ ИСПРАВЛЕНИЕ ВЫПОЛНЕНО!</strong>")
+        
         return True, results
         
     except Exception as e:

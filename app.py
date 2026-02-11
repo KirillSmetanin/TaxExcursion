@@ -1139,15 +1139,15 @@ def export_csv():
             SELECT 
                 id,
                 excursion_date,
-                username as responsible_person,
-                school_name,
-                class_number,
-                class_profile,
-                contact_phone,
+                COALESCE(username, '') as username,
+                COALESCE(school_name, '') as school_name,
+                COALESCE(class_number, '') as class_number,
+                COALESCE(class_profile, '') as class_profile,
+                COALESCE(contact_phone, '') as contact_phone,
                 participants_count,
-                status,
+                COALESCE(status, 'pending') as status,
                 booking_date,
-                additional_info
+                COALESCE(additional_info, '') as additional_info
             FROM bookings 
             ORDER BY excursion_date DESC, booking_date DESC
         ''')
@@ -1192,22 +1192,30 @@ def export_csv():
             excursion_date = booking['excursion_date']
             if isinstance(excursion_date, date):
                 excursion_date = excursion_date.strftime('%d.%m.%Y')
+            elif excursion_date:
+                excursion_date = str(excursion_date)
+            else:
+                excursion_date = ''
             
             booking_date = booking['booking_date']
             if isinstance(booking_date, datetime):
                 booking_date = booking_date.strftime('%d.%m.%Y %H:%M')
             elif isinstance(booking_date, date):
                 booking_date = booking_date.strftime('%d.%m.%Y')
+            elif booking_date:
+                booking_date = str(booking_date)
+            else:
+                booking_date = ''
             
             writer.writerow([
                 booking['id'],
                 excursion_date,
-                booking['username'] or booking.get('responsible_person', ''),
-                booking['school_name'],
-                booking['class_number'],
+                booking.get('username', ''),  # ← ИСПРАВЛЕНО: используем .get()
+                booking.get('school_name', ''),
+                booking.get('class_number', ''),
                 booking.get('class_profile', ''),
-                booking['contact_phone'],
-                booking['participants_count'],
+                booking.get('contact_phone', ''),
+                booking.get('participants_count', 0),
                 status_rus,
                 booking_date,
                 booking.get('additional_info', '')
@@ -1232,7 +1240,7 @@ def export_csv():
         <html>
         <body style="font-family: Arial; padding: 40px; text-align: center;">
             <h1 style="color: #e74c3c;">❌ Ошибка экспорта CSV</h1>
-            <p>{str(e)}</p>
+            <p style="background: #ffe6e6; padding: 15px; border-radius: 5px;">{str(e)}</p>
             <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
                 Вернуться в админ-панель
             </a>
@@ -1251,16 +1259,16 @@ def export_json():
         cursor.execute('''
             SELECT 
                 id,
-                username,
-                school_name,
-                class_number,
-                class_profile,
+                COALESCE(username, '') as username,
+                COALESCE(school_name, '') as school_name,
+                COALESCE(class_number, '') as class_number,
+                COALESCE(class_profile, '') as class_profile,
                 excursion_date,
-                contact_phone,
+                COALESCE(contact_phone, '') as contact_phone,
                 participants_count,
-                status,
+                COALESCE(status, 'pending') as status,
                 booking_date,
-                additional_info
+                COALESCE(additional_info, '') as additional_info
             FROM bookings 
             ORDER BY excursion_date DESC, booking_date DESC
         ''')
@@ -1283,9 +1291,13 @@ def export_json():
             # Преобразуем даты в строки
             if isinstance(booking_dict.get('excursion_date'), (date, datetime)):
                 booking_dict['excursion_date'] = booking_dict['excursion_date'].strftime('%d.%m.%Y')
+            elif booking_dict.get('excursion_date'):
+                booking_dict['excursion_date'] = str(booking_dict['excursion_date'])
             
             if isinstance(booking_dict.get('booking_date'), (date, datetime)):
                 booking_dict['booking_date'] = booking_dict['booking_date'].strftime('%d.%m.%Y %H:%M')
+            elif booking_dict.get('booking_date'):
+                booking_dict['booking_date'] = str(booking_dict['booking_date'])
             
             # Добавляем русский статус
             booking_dict['status_rus'] = status_map.get(booking_dict.get('status', 'pending'), booking_dict.get('status', ''))
@@ -1312,7 +1324,7 @@ def export_json():
         <html>
         <body style="font-family: Arial; padding: 40px; text-align: center;">
             <h1 style="color: #e74c3c;">❌ Ошибка экспорта JSON</h1>
-            <p>{str(e)}</p>
+            <p style="background: #ffe6e6; padding: 15px; border-radius: 5px;">{str(e)}</p>
             <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
                 Вернуться в админ-панель
             </a>

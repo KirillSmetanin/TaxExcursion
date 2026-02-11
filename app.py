@@ -1126,7 +1126,325 @@ def health():
             'dАatabase': 'disconnected',
             'error': str(e)
         }, 500
+
+@app.route('/admin/export/csv')
+@admin_required
+def export_csv():
+    """Экспорт всех записей в CSV с разделителями, совместимый с Excel"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(row_factory=dict_row)
+        
+        cursor.execute('''
+            SELECT 
+                id,
+                excursion_date,
+                username as responsible_person,
+                school_name,
+                class_number,
+                class_profile,
+                contact_phone,
+                participants_count,
+                status,
+                booking_date,
+                additional_info
+            FROM bookings 
+            ORDER BY excursion_date DESC, booking_date DESC
+        ''')
+        
+        bookings = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Создаем CSV в памяти
+        output = io.StringIO()
+        
+        # Используем точку с запятой как разделитель (лучше для Excel/Russian Excel)
+        # и UTF-8 with BOM для корректного отображения русских букв
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_ALL)
+        
+        # Заголовки на русском
+        writer.writerow([
+            'ID',
+            'Дата экскурсии',
+            'Ответственный',
+            'Школа',
+            'Класс',
+            'Профиль класса',
+            'Телефон',
+            'Кол-во участников',
+            'Статус',
+            'Дата записи',
+            'Дополнительная информация'
+        ])
+        
+        # Данные
+        for booking in bookings:
+            # Форматируем статус
+            status_map = {
+                'pending': 'Ожидание',
+                'confirmed': 'Подтверждено',
+                'cancelled': 'Отменено'
+            }
+            status_rus = status_map.get(booking.get('status', 'pending'), booking.get('status', ''))
+            
+            # Форматируем даты
+            excursion_date = booking['excursion_date']
+            if isinstance(excursion_date, date):
+                excursion_date = excursion_date.strftime('%d.%m.%Y')
+            
+            booking_date = booking['booking_date']
+            if isinstance(booking_date, datetime):
+                booking_date = booking_date.strftime('%d.%m.%Y %H:%M')
+            elif isinstance(booking_date, date):
+                booking_date = booking_date.strftime('%d.%m.%Y')
+            
+            writer.writerow([
+                booking['id'],
+                excursion_date,
+                booking['username'] or booking.get('responsible_person', ''),
+                booking['school_name'],
+                booking['class_number'],
+                booking.get('class_profile', ''),
+                booking['contact_phone'],
+                booking['participants_count'],
+                status_rus,
+                booking_date,
+                booking.get('additional_info', '')
+            ])
+        
+        # Подготавливаем ответ с UTF-8 BOM для Excel
+        csv_content = output.getvalue()
+        output.close()
+        
+        # Добавляем BOM для корректного отображения UTF-8 в Excel
+        csv_bytes = b'\xef\xbb\xbf' + csv_content.encode('utf-8')
+        
+        response = make_response(csv_bytes)
+        response.headers['Content-Disposition'] = f'attachment; filename=excursions_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        
+        return response
+        
+    except Exception as e:
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h1 style="color: #e74c3c;">❌ Ошибка экспорта CSV</h1>
+            <p>{str(e)}</p>
+            <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
+                Вернуться в админ-панель
+            </a>
+        </body>
+        </html>
+        ''', 500
+
+@app.route('/admin/export/json')
+@admin_required
+def export_json():
+    """Экспорт всех записей в JSON с форматированием"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(row_factory=dict_row)
+        
+        cursor.execute('''
+            SELECT 
+                id,
+                username,
+                school_name,
+                class_number,
+                class_profile,
+                excursion_date,
+                contact_phone,
+                participants_count,
+                status,
+                booking_date,
+                additional_info
+            FROM bookings 
+            ORDER BY excursion_date DESC, booking_date DESC
+        ''')
+        
+        bookings = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Преобразуем даты в строки для JSON
+        export_data = []
+        status_map = {
+            'pending': 'Ожидание',
+            'confirmed': 'Подтверждено',
+            'cancelled': 'Отменено'
+        }
+        
+        for booking in bookings:
+            booking_dict = dict(booking)
+            
+            # Преобразуем даты в строки
+            if isinstance(booking_dict.get('excursion_date'), (date, datetime)):
+                booking_dict['excursion_date'] = booking_dict['excursion_date'].strftime('%d.%m.%Y')
+            
+            if isinstance(booking_dict.get('booking_date'), (date, datetime)):
+                booking_dict['booking_date'] = booking_dict['booking_date'].strftime('%d.%m.%Y %H:%M')
+            
+            # Добавляем русский статус
+            booking_dict['status_rus'] = status_map.get(booking_dict.get('status', 'pending'), booking_dict.get('status', ''))
+            
+            export_data.append(booking_dict)
+        
+        # Создаем объект с метаданными
+        result = {
+            'export_date': datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+            'total_records': len(export_data),
+            'data': export_data
+        }
+        
+        # Отправляем JSON с отступами для читаемости
+        response = make_response(json.dumps(result, ensure_ascii=False, indent=2))
+        response.headers['Content-Disposition'] = f'attachment; filename=excursions_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        
+        return response
+        
+    except Exception as e:
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <body style="font-family: Arial; padding: 40px; text-align: center;">
+            <h1 style="color: #e74c3c;">❌ Ошибка экспорта JSON</h1>
+            <p>{str(e)}</p>
+            <a href="/admin" style="display: inline-block; padding: 12px 24px; background: #3498db; color: white; text-decoration: none; border-radius: 5px;">
+                Вернуться в админ-панель
+            </a>
+        </body>
+        </html>
+        ''', 500
     
+@app.route('/admin/export/csv_filtered')
+@admin_required
+def export_csv_filtered():
+    """Экспорт отфильтрованных записей в CSV"""
+    try:
+        # Получаем параметры фильтрации из URL
+        status_filter = request.args.get('status', 'all')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        search = request.args.get('search', '')
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(row_factory=dict_row)
+        
+        # Строим запрос с фильтрацией (как в админ-панели)
+        query = '''
+            SELECT 
+                id,
+                excursion_date,
+                username as responsible_person,
+                school_name,
+                class_number,
+                class_profile,
+                contact_phone,
+                participants_count,
+                status,
+                booking_date,
+                additional_info
+            FROM bookings 
+        '''
+        params = []
+        where_clauses = []
+        
+        if status_filter != 'all':
+            where_clauses.append('status = %s')
+            params.append(status_filter)
+        
+        if date_from:
+            where_clauses.append('excursion_date >= %s')
+            params.append(date_from)
+        
+        if date_to:
+            where_clauses.append('excursion_date <= %s')
+            params.append(date_to)
+        
+        if search:
+            where_clauses.append('''
+                (school_name ILIKE %s OR 
+                 username ILIKE %s OR 
+                 contact_phone ILIKE %s)
+            ''')
+            search_term = f'%{search}%'
+            params.extend([search_term, search_term, search_term])
+        
+        if where_clauses:
+            query += ' WHERE ' + ' AND '.join(where_clauses)
+        
+        query += ' ORDER BY excursion_date DESC, booking_date DESC'
+        
+        cursor.execute(query, params)
+        bookings = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        
+        # Создаем CSV (аналогично основному экспорту)
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_ALL)
+        
+        writer.writerow([
+            'ID', 'Дата экскурсии', 'Ответственный', 'Школа', 'Класс',
+            'Профиль класса', 'Телефон', 'Кол-во участников', 'Статус',
+            'Дата записи', 'Дополнительная информация'
+        ])
+        
+        status_map = {
+            'pending': 'Ожидание',
+            'confirmed': 'Подтверждено',
+            'cancelled': 'Отменено'
+        }
+        
+        for booking in bookings:
+            excursion_date = booking['excursion_date']
+            if isinstance(excursion_date, date):
+                excursion_date = excursion_date.strftime('%d.%m.%Y')
+            
+            booking_date = booking['booking_date']
+            if isinstance(booking_date, datetime):
+                booking_date = booking_date.strftime('%d.%m.%Y %H:%M')
+            elif isinstance(booking_date, date):
+                booking_date = booking_date.strftime('%d.%m.%Y')
+            
+            writer.writerow([
+                booking['id'],
+                excursion_date,
+                booking['username'] or booking.get('responsible_person', ''),
+                booking['school_name'],
+                booking['class_number'],
+                booking.get('class_profile', ''),
+                booking['contact_phone'],
+                booking['participants_count'],
+                status_map.get(booking.get('status', 'pending'), booking.get('status', '')),
+                booking_date,
+                booking.get('additional_info', '')
+            ])
+        
+        csv_content = output.getvalue()
+        output.close()
+        
+        csv_bytes = b'\xef\xbb\xbf' + csv_content.encode('utf-8')
+        
+        # Генерируем имя файла с учетом фильтров
+        filename_parts = ['excursions']
+        if status_filter != 'all':
+            filename_parts.append(status_filter)
+        filename_parts.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
+        
+        response = make_response(csv_bytes)
+        response.headers['Content-Disposition'] = f'attachment; filename={"_".join(filename_parts)}.csv'
+        response.headers['Content-Type'] = 'text/csv; charset=utf-8'
+        
+        return response
+        
+    except Exception as e:
+        return str(e), 500
+
 @app.route('/admin/reset_database', methods=['GET', 'POST'])
 @admin_required
 def admin_reset_database():
